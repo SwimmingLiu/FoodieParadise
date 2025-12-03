@@ -1,16 +1,56 @@
 {
-	"pages": [ //pages数组中第一项表示应用启动页，参考：https://uniapp.dcloud.io/collocation/pages
+	"pages": [
 		{
 			"path": "pages/index/index",
 			"style": {
-				"navigationBarTitleText": "uni-app"
+				"navigationBarTitleText": "FoodieParadise"
+			}
+		},
+		{
+			"path": "pages/where-to-eat/index",
+			"style": {
+				"navigationBarTitleText": "Where to Eat"
+			}
+		},
+		{
+			"path": "pages/check-premade/index",
+			"style": {
+				"navigationBarTitleText": "Check Pre-made"
+			}
+		},
+		{
+			"path": "pages/calories/index",
+			"style": {
+				"navigationBarTitleText": "How Much to Eat"
+			}
+		},
+		{
+			"path": "pages/my/index",
+			"style": {
+				"navigationBarTitleText": "My Profile"
 			}
 		}
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "uni-app",
+		"navigationBarTitleText": "FoodieParadise",
 		"navigationBarBackgroundColor": "#F8F8F8",
 		"backgroundColor": "#F8F8F8"
+	},
+	"tabBar": {
+		"color": "#7A7E83",
+		"selectedColor": "#3cc51f",
+		"borderStyle": "black",
+		"backgroundColor": "#ffffff",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "Home"
+			},
+			{
+				"pagePath": "pages/my/index",
+				"text": "My"
+			}
+		]
 	}
 }

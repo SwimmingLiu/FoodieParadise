@@ -100,7 +100,134 @@ def should_continue(state: AgentState):
         return "tools"
     return END
 
-workflow.add_conditional_edges("agent", should_continue)
-workflow.add_edge("tools", END) # End after one tool call for simplicity in this demo
+# ... (Previous imports and code)
 
-app_graph = workflow.compile()
+# Define Tools for Check Pre-made
+@tool
+def analyze_premade(image_path: str):
+    """Analyze if the food in the image is pre-made."""
+    # Mock analysis
+    return json.dumps({
+        "dish_name": "Braised Pork Rice",
+        "is_premade": True,
+        "score": 85, # 85% probability of being pre-made
+        "freshness": "Semi-premade",
+        "confidence": 0.9,
+        "reasons": [
+            "Uniform shape of meat cuts suggests industrial processing.",
+            "Sauce consistency is too perfect/gelatinous.",
+            "Vegetables lack natural color variation."
+        ]
+    })
+
+# Define Node for Check Pre-made
+async def check_premade_node(state: AgentState):
+    messages = state["messages"]
+    # Simulate analysis
+    return {
+        "messages": [
+            AIMessage(content="Analyzing the food for pre-made signs...", 
+                      additional_kwargs={"thought": "Checking texture, color, and consistency..."}),
+            AIMessage(content="", tool_calls=[{"name": "analyze_premade", "args": {"image_path": state["image_path"]}, "id": "call_2"}])
+        ]
+    }
+
+async def premade_tools_node(state: AgentState):
+    messages = state["messages"]
+    last_message = messages[-1]
+    
+    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        tool_call = last_message.tool_calls[0]
+        if tool_call["name"] == "analyze_premade":
+            result = analyze_premade.invoke(tool_call["args"])
+            data = json.loads(result)
+            
+            report = f"**Dish Name**: {data['dish_name']}\n"
+            report += f"**Pre-made Probability**: {data['score']}%\n"
+            report += f"**Freshness**: {data['freshness']}\n"
+            report += "**Analysis**:\n" + "\n".join([f"- {r}" for r in data['reasons']])
+            
+            return {
+                "messages": [
+                    AIMessage(content=report, 
+                              additional_kwargs={"message": report}) # Send as message
+                ]
+            }
+    return {"messages": []}
+
+# We need a way to route to different agents. 
+# For simplicity, we can create separate graphs or use a router.
+# Let's create a separate graph for Check Pre-made.
+
+premade_workflow = StateGraph(AgentState)
+premade_workflow.add_node("agent", check_premade_node)
+premade_workflow.add_node("tools", premade_tools_node)
+premade_workflow.set_entry_point("agent")
+premade_workflow.add_conditional_edges("agent", should_continue)
+premade_workflow.add_edge("tools", END)
+
+# ... (Previous imports and code)
+
+# Define Tools for Calories
+@tool
+def analyze_calories(image_path: str):
+    """Analyze calories in the food image."""
+    # Mock analysis
+    return json.dumps({
+        "items": [
+            {"name": "Rice", "calories": 200, "bbox": [100, 100, 200, 200]},
+            {"name": "Pork", "calories": 350, "bbox": [200, 100, 300, 200]},
+            {"name": "Vegetables", "calories": 50, "bbox": [150, 200, 250, 250]}
+        ],
+        "total_calories": 600,
+        "advice": "Moderate meal, good protein content."
+    })
+
+# Define Node for Calories
+async def calories_node(state: AgentState):
+    messages = state["messages"]
+    return {
+        "messages": [
+            AIMessage(content="Identifying food items and estimating calories...", 
+                      additional_kwargs={"thought": "Detecting objects: Rice, Pork, Veggies..."}),
+            AIMessage(content="", tool_calls=[{"name": "analyze_calories", "args": {"image_path": state["image_path"]}, "id": "call_3"}])
+        ]
+    }
+
+async def calories_tools_node(state: AgentState):
+    messages = state["messages"]
+    last_message = messages[-1]
+    
+    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        tool_call = last_message.tool_calls[0]
+        if tool_call["name"] == "analyze_calories":
+            result = analyze_calories.invoke(tool_call["args"])
+            data = json.loads(result)
+            
+            # Construct a report and pass structured data for frontend annotation
+            report = f"**Total Calories**: {data['total_calories']} kcal\n\n"
+            for item in data['items']:
+                report += f"- **{item['name']}**: {item['calories']} kcal\n"
+            report += f"\n**Advice**: {data['advice']}"
+            
+            return {
+                "messages": [
+                    AIMessage(content=report, 
+                              additional_kwargs={
+                                  "message": report,
+                                  "function_call": {"action": "annotate_image", "items": data['items']}
+                              })
+                ]
+            }
+    return {"messages": []}
+
+calories_workflow = StateGraph(AgentState)
+calories_workflow.add_node("agent", calories_node)
+calories_workflow.add_node("tools", calories_tools_node)
+calories_workflow.set_entry_point("agent")
+calories_workflow.add_conditional_edges("agent", should_continue)
+calories_workflow.add_edge("tools", END)
+
+calories_graph = calories_workflow.compile()
+
+
