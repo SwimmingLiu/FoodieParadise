@@ -37,7 +37,7 @@ async def where_to_eat(request: ChatRequest):
         "messages": [HumanMessage(content=request.query or "Where is this?")],
         "image_path": request.file_path
     }
-    
+
     async def agent_stream():
         async for output in where_to_eat_graph.astream(inputs, stream_mode="updates"):
             for node_name, state_update in output.items():

@@ -4,7 +4,7 @@
     <view class="hero-section">
       <image class="hero-bg" src="/static/首页图.png" mode="aspectFill"></image>
       <view class="hero-content">
-        <text class="hero-title">FoodieParadise</text>
+        <text class="hero-title">美食天堂</text>
         <text class="hero-subtitle">发现 · 分析 · 享受</text>
       </view>
     </view>

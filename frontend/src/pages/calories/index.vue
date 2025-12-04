@@ -1,15 +1,15 @@
 <template>
   <view class="container">
     <view class="header">
-      <text class="title">How Much to Eat</text>
-      <text class="subtitle">Estimate calories in your meal</text>
+      <text class="title">吃多少</text>
+      <text class="subtitle">估算餐食热量</text>
     </view>
 
     <!-- Upload Area -->
     <view class="upload-area" @click="chooseImage" v-if="!currentImage">
       <view class="placeholder">
         <text class="icon">📷</text>
-        <text>Tap to Upload</text>
+        <text>点击上传</text>
       </view>
     </view>
     <view class="preview-area" v-else>
@@ -21,14 +21,14 @@
         <text class="annotation-label">{{ item.name }}: {{ item.calories }}kcal</text>
       </view>
       
-      <view class="re-upload" @click="chooseImage">Retake</view>
+      <view class="re-upload" @click="chooseImage">重拍</view>
     </view>
 
     <!-- Analysis Result -->
     <scroll-view class="result-area" scroll-y v-if="analyzing || result">
       <!-- Thoughts -->
       <view class="thoughts" v-if="thoughts.length > 0">
-        <text class="thought-label">AI Thinking:</text>
+        <text class="thought-label">AI 思考中：</text>
         <view v-for="(t, i) in thoughts" :key="i" class="thought-item">
           {{ t }}
         </view>
@@ -40,11 +40,11 @@
       </view>
       
       <view class="loading" v-if="analyzing && !result">
-        <text>Analyzing...</text>
+        <text>分析中...</text>
       </view>
     </scroll-view>
     
-    <button class="analyze-btn" @click="startAnalysis" v-if="currentImage && !analyzing">Analyze</button>
+    <button class="analyze-btn" @click="startAnalysis" v-if="currentImage && !analyzing">开始分析</button>
   </view>
 </template>
 
@@ -126,7 +126,7 @@ const startAnalysis = () => {
         },
         onError: (err) => {
             console.error(err);
-            result.value += "\n[Error: Analysis failed]";
+            result.value += "\n[错误：分析失败]";
             analyzing.value = false;
         }
       });

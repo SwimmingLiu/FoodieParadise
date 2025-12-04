@@ -4,14 +4,14 @@
     <view class="profile-section">
       <image class="avatar" src="/static/logo.png" mode="aspectFill"></image>
       <view class="info">
-        <text class="nickname">Foodie User</text>
+        <text class="nickname">美食家</text>
         <text class="uid">ID: 888888</text>
       </view>
     </view>
 
     <!-- History List -->
     <view class="history-section">
-      <text class="section-title">History</text>
+      <text class="section-title">历史记录</text>
       <scroll-view scroll-y class="history-list">
         <view v-for="(item, index) in historyList" :key="index" class="history-item">
           <image :src="item.image_path" mode="aspectFill" class="history-thumb"></image>
@@ -24,7 +24,7 @@
           </view>
         </view>
         <view v-if="historyList.length === 0" class="empty-state">
-          <text>No history yet.</text>
+          <text>暂无历史记录</text>
         </view>
       </scroll-view>
     </view>
@@ -51,9 +51,9 @@ onMounted(() => {
 
 const formatType = (type) => {
   const map = {
-    'where-to-eat': 'Where to Eat',
-    'check-premade': 'Check Pre-made',
-    'calories': 'Calories'
+    'where-to-eat': '去哪吃',
+    'check-premade': '查预制',
+    'calories': '吃多少'
   };
   return map[type] || type;
 };
