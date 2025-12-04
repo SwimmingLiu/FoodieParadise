@@ -102,7 +102,9 @@ const sendMessage = () => {
       const filePath = data.file_path;
       
       // 2. Start Stream
-      streamRequest({
+        let buffer = '';
+        
+        streamRequest({
         url: 'http://localhost:8000/api/where-to-eat',
         method: 'POST',
         data: {
@@ -110,30 +112,46 @@ const sendMessage = () => {
             query: inputText.value
         },
         onChunk: (text) => {
-            // Parse custom protocol
-            // Format: event: ...\ndata: ...\n\n
-            const lines = text.split('\n');
-            let currentEvent = null;
+            buffer += text;
+            // Split by double newline which separates events in SSE
+            const events = buffer.split('\n\n');
+            // Keep the last part in buffer as it might be incomplete
+            buffer = events.pop();
             
-            for (let line of lines) {
-                if (line.startsWith('event: ')) {
-                    currentEvent = line.substring(7).trim();
-                } else if (line.startsWith('data: ')) {
-                    const content = line.substring(6);
-                    if (!content) continue;
-                    
-                    if (currentEvent === 'thought') {
-                        messages.value[aiMsgIndex].thoughts.push(content);
-                    } else if (currentEvent === 'message') {
-                        messages.value[aiMsgIndex].content += content;
-                    } else if (currentEvent === 'function_call') {
-                        try {
-                            const call = JSON.parse(content);
-                            if (call.action === 'open_map') {
-                                messages.value[aiMsgIndex].map = call;
+            for (let eventStr of events) {
+                if (!eventStr.trim()) continue;
+                
+                const lines = eventStr.split('\n');
+                let currentEvent = null;
+                
+                for (let line of lines) {
+                    if (line.startsWith('event: ')) {
+                        currentEvent = line.substring(7).trim();
+                    } else if (line.startsWith('data: ')) {
+                        const content = line.substring(6);
+                        // content might be empty string if data: is empty, but usually it has content
+                        
+                        if (currentEvent === 'thought') {
+                            // Append to last thought or push new?
+                            // Usually thought is a stream of text.
+                            // We can just append to a "current thought" buffer in the UI or push lines.
+                            // The UI iterates thoughts. Let's push line by line or append?
+                            // If we push every chunk, we get many small lines.
+                            // Better to append to the last thought if it exists, or just push.
+                            // The UI code: <text v-for="(thought, tIndex) in msg.thoughts" ...>
+                            // If we push, it's fine.
+                            messages.value[aiMsgIndex].thoughts.push(content);
+                        } else if (currentEvent === 'message') {
+                            messages.value[aiMsgIndex].content += content;
+                        } else if (currentEvent === 'function_call') {
+                            try {
+                                const call = JSON.parse(content);
+                                if (call.action === 'open_map') {
+                                    messages.value[aiMsgIndex].map = call;
+                                }
+                            } catch (e) {
+                                console.error("Error parsing function call", e);
                             }
-                        } catch (e) {
-                            console.error("Error parsing function call", e);
                         }
                     }
                 }

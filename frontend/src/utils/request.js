@@ -31,13 +31,19 @@ export const streamRequest = ({ url, method = 'GET', data = {}, header = {}, onC
       // Note: TextDecoder might not be available in all WeChat Mini Program environments directly.
       // If not, we need a polyfill or a simple implementation.
       // For modern WeChat base library, TextDecoder is supported.
-      
+
       try {
-        const text = decodeURIComponent(escape(String.fromCharCode(...uint8Array)));
+        let text;
+        if (typeof TextDecoder !== 'undefined') {
+          const decoder = new TextDecoder('utf-8');
+          text = decoder.decode(uint8Array, { stream: true });
+        } else {
+          // Fallback for environments without TextDecoder
+          text = decodeURIComponent(escape(String.fromCharCode(...uint8Array)));
+        }
         if (onChunk) onChunk(text);
       } catch (e) {
         console.error("Error decoding chunk:", e);
-        // Fallback or handle partial characters (advanced)
       }
     }
   });

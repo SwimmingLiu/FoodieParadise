@@ -6,3 +6,7 @@ langgraph
 langchain-community
 httpx
 pydantic
+langchain-openai
+qiniu
+sqlalchemy
+pymysql
