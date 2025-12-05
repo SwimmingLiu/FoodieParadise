@@ -69,9 +69,9 @@
                     </view>
                 </view>
 
-                <!-- Text Content -->
+                <!-- Text Content with Markdown support -->
                 <view v-if="msg.content" class="msg-bubble ai-bubble">
-                    <text>{{ msg.content }}</text>
+                    <mp-html :content="parseMarkdown(msg.content)" />
                 </view>
             </view>
         </view>
@@ -109,6 +109,14 @@
 <script setup>
 import { ref, nextTick } from 'vue';
 import { streamRequest } from '../../utils/request.js';
+import mpHtml from 'mp-html/dist/uni-app/components/mp-html/mp-html.vue';
+import { marked } from 'marked';
+
+// Configure marked for safe and clean markdown parsing
+marked.setOptions({
+    breaks: true, // Convert \n to <br>
+    gfm: true,    // GitHub Flavored Markdown
+});
 
 // State
 const banners = ref([
@@ -206,7 +214,7 @@ const sendMessage = () => {
 
     scrollToBottom();
 
-    // Start Stream
+    // Start Stream with proper event handling
     streamRequest({
         url: 'http://localhost:8000/api/where-to-eat',
         method: 'POST',
@@ -214,55 +222,25 @@ const sendMessage = () => {
             file_path: currentRemoteFilePath.value,
             query: query
         },
-        onChunk: (text) => {
-            // Simple SSE parsing (assuming standard format)
-            // The utility might return raw chunks, need to buffer and split
-            // Assuming streamRequest handles basic buffering or we do it here.
-            // Let's assume the previous logic was correct about buffering.
-            // Re-implementing robust parsing:
+        // Use the new onEvent callback for properly parsed SSE events
+        onEvent: (eventType, data) => {
+            if (!data) return;
             
-            const lines = text.split('\n');
-            let currentEvent = null;
-            
-            for (let line of lines) {
-                line = line.trim();
-                if (line.startsWith('event: ')) {
-                    currentEvent = line.substring(7);
-                } else if (line.startsWith('data: ')) {
-                    const content = line.substring(6);
-                    if (!content) continue;
-
-                    if (currentEvent === 'thought') {
-                        // Check if it's a JSON object or raw string
-                        // The backend sends {"thought": ...} sometimes? 
-                        // Based on controller: yield {"thought": ...} -> SSE event: thought, data: ...
-                        // Wait, controller uses `stream_generator` which likely formats as SSE.
-                        // Let's assume content is the raw string or JSON.
-                        // If backend sends JSON string, we parse it.
-                        try {
-                             // If content is just text, push it.
-                             messages.value[aiMsgIndex].thoughts.push(content);
-                        } catch (e) {
-                             messages.value[aiMsgIndex].thoughts.push(content);
-                        }
-                    } else if (currentEvent === 'message') {
-                        messages.value[aiMsgIndex].content += content;
-                    } else if (currentEvent === 'function_call') {
-                         try {
-                            const call = JSON.parse(content);
-                            // Assuming the agent returns a function call for map
-                            // or maybe the final message contains the address.
-                            // The prompt says "Backend will send final reasoning content... containing address info... display as WeChat address".
-                            // If the backend returns a structured tool call for location, we use it.
-                            // If not, we might need to parse the text.
-                            // Let's assume 'open_map' or similar tool call.
-                            if (call.name === 'open_map' || call.action === 'open_map') {
-                                messages.value[aiMsgIndex].map = call.arguments || call;
-                            }
-                        } catch (e) {
-                            console.error("Function call parse error", e);
-                        }
+            if (eventType === 'thought') {
+                // Add thought to the thinking process list
+                messages.value[aiMsgIndex].thoughts.push(decodeHTMLEntities(data));
+            } else if (eventType === 'message') {
+                // Append message content (supports streaming markdown)
+                messages.value[aiMsgIndex].content += decodeHTMLEntities(data);
+            } else if (eventType === 'function_call') {
+                try {
+                    const call = JSON.parse(data);
+                    // Handle map location function call
+                    if (call.name === 'open_map' || call.action === 'open_map') {
+                        messages.value[aiMsgIndex].map = call.arguments || call;
                     }
+                } catch (e) {
+                    console.error("Function call parse error", e);
                 }
             }
             scrollToBottom();
@@ -297,6 +275,39 @@ const openLocation = (mapData) => {
         name: mapData.name || '未知地点',
         address: mapData.address || '详细地址未知'
     });
+};
+
+/**
+ * Decode HTML entities (e.g., &gt; -> >)
+ * @param {string} text - Text with HTML entities
+ * @returns {string} Decoded text
+ */
+const decodeHTMLEntities = (text) => {
+    if (!text) return '';
+    const entities = {
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&#39;': "'",
+        '&nbsp;': ' '
+    };
+    return text.replace(/&amp;|&lt;|&gt;|&quot;|&#39;|&nbsp;/g, (match) => entities[match] || match);
+};
+
+/**
+ * Parse markdown content to HTML
+ * @param {string} content - Markdown content
+ * @returns {string} HTML content
+ */
+const parseMarkdown = (content) => {
+    if (!content) return '';
+    try {
+        return marked.parse(content);
+    } catch (e) {
+        console.error('Markdown parse error:', e);
+        return content;
+    }
 };
 </script>
 

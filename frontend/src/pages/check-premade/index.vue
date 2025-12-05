@@ -27,9 +27,9 @@
         </view>
       </view>
 
-      <!-- Report -->
+      <!-- Report with Markdown support -->
       <view class="report" v-if="result">
-        <text class="report-content">{{ result }}</text>
+        <mp-html :content="parseMarkdown(result)" />
       </view>
       
       <view class="loading" v-if="analyzing && !result">
@@ -44,6 +44,14 @@
 <script setup>
 import { ref } from 'vue';
 import { streamRequest } from '../../utils/request.js';
+import mpHtml from 'mp-html/dist/uni-app/components/mp-html/mp-html.vue';
+import { marked } from 'marked';
+
+// Configure marked for safe and clean markdown parsing
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+});
 
 const currentImage = ref(null);
 const analyzing = ref(false);
@@ -80,27 +88,18 @@ const startAnalysis = () => {
       const data = JSON.parse(uploadRes.data);
       const filePath = data.file_path;
       
-      // 2. Stream
+      // 2. Stream with proper event handling
       streamRequest({
         url: 'http://localhost:8000/api/check-premade',
         method: 'POST',
         data: { file_path: filePath },
-        onChunk: (text) => {
-            const lines = text.split('\n');
-            let currentEvent = null;
-            for (let line of lines) {
-                if (line.startsWith('event: ')) {
-                    currentEvent = line.substring(7).trim();
-                } else if (line.startsWith('data: ')) {
-                    const content = line.substring(6);
-                    if (!content) continue;
-                    
-                    if (currentEvent === 'thought') {
-                        thoughts.value.push(content);
-                    } else if (currentEvent === 'message') {
-                        result.value += content; // Markdown content
-                    }
-                }
+        onEvent: (eventType, data) => {
+            if (!data) return;
+            
+            if (eventType === 'thought') {
+                thoughts.value.push(decodeHTMLEntities(data));
+            } else if (eventType === 'message') {
+                result.value += decodeHTMLEntities(data);
             }
         },
         onComplete: () => {
@@ -118,6 +117,35 @@ const startAnalysis = () => {
         analyzing.value = false;
     }
   });
+};
+
+/**
+ * Decode HTML entities (e.g., &gt; -> >)
+ */
+const decodeHTMLEntities = (text) => {
+    if (!text) return '';
+    const entities = {
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&#39;': "'",
+        '&nbsp;': ' '
+    };
+    return text.replace(/&amp;|&lt;|&gt;|&quot;|&#39;|&nbsp;/g, (match) => entities[match] || match);
+};
+
+/**
+ * Parse markdown content to HTML
+ */
+const parseMarkdown = (content) => {
+    if (!content) return '';
+    try {
+        return marked.parse(content);
+    } catch (e) {
+        console.error('Markdown parse error:', e);
+        return content;
+    }
 };
 </script>
 

@@ -3,6 +3,16 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 import shutil
 import os
+import logging
+import sys
+
+# 配置 logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
 
 from app.models.schemas import ChatRequest, HistoryRecord
 from app.services.agent_service import app_graph, where_to_eat_graph, premade_graph, calories_graph
@@ -39,23 +49,44 @@ async def where_to_eat(request: ChatRequest):
     }
 
     async def agent_stream():
-        async for output in where_to_eat_graph.astream(inputs, stream_mode="updates"):
-            for node_name, state_update in output.items():
-                if "messages" in state_update:
-                    messages = state_update["messages"]
+        logger.info(f"[CONTROLLER] Starting agent_stream with inputs: {inputs}")
+        # Use astream_events to capture custom thought events and node outputs
+        async for event in where_to_eat_graph.astream_events(inputs, version="v2"):
+            kind = event["event"]
+            name = event["name"]
+            
+            # 1. Capture custom "thought" events dispatched from the node
+            if kind == "on_custom_event" and name == "thought":
+                data = event["data"]
+                if "content" in data:
+                     logger.info(f"[CONTROLLER] Yielding thought: {data['content'][:20]}...")
+                     yield {"thought": data["content"]}
+            
+            # 2. Capture the final output of the "agent" node to get function_call/results
+            elif kind == "on_chain_end" and name == "agent":
+                data = event["data"]
+                output = data.get("output")
+                if output and "messages" in output:
+                    messages = output["messages"]
+                    logger.info(f"[CONTROLLER] Node 'agent' finished. Messages: {len(messages)}")
                     for msg in messages:
                         if isinstance(msg, HumanMessage): continue
                         
-                        if "thought" in msg.additional_kwargs:
-                            yield {"thought": msg.additional_kwargs["thought"]}
+                        # We already streamed "thought", so we skip it here usually,
+                        # unless we want to send the full thought block again (which we don't).
                         
                         if "function_call" in msg.additional_kwargs:
+                            logger.info("[CONTROLLER] Yielding function_call")
                             yield {"function_call": msg.additional_kwargs["function_call"]}
                             
                         if "message" in msg.additional_kwargs:
-                             yield {"message": msg.additional_kwargs["message"]}
+                            # This is the "Result" text or Error text
+                            logger.info("[CONTROLLER] Yielding message")
+                            yield {"message": msg.additional_kwargs["message"]}
                         elif msg.content and "thought" not in msg.additional_kwargs:
-                             yield {"message": msg.content}
+                            # Generic content that isn't thought
+                            logger.info("[CONTROLLER] Yielding message from content")
+                            yield {"message": msg.content}
 
     return StreamingResponse(stream_generator(agent_stream()), media_type="text/event-stream")
 

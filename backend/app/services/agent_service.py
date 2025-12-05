@@ -1,3 +1,10 @@
+"""
+Agent 服务模块
+
+实现基于 LangGraph 的智能 Agent 工作流。
+包含"去哪吃"、"查预制"、"吃多少"三个功能的完整流程。
+"""
+
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -5,126 +12,209 @@ import json
 import base64
 import re
 import os
+import random
 
 from app.models.state import AgentState
 from app.services.tools import search_location, analyze_premade, analyze_calories
 from app.constants.prompts import WHERE_TO_EAT_PROMPT
+from app.constants.preset_responses import (
+    WHERE_TO_EAT_PRESETS,
+    CHECK_PREMADE_PRESETS,
+    CALORIES_PRESETS
+)
+from app.config import settings
 
-# --- Helper Functions ---
+from langchain_core.runnables import RunnableConfig
+from langchain_core.callbacks.manager import adispatch_custom_event
+
+
+# ========== 辅助函数 ==========
+
+def get_preset_response(preset_list: list) -> str:
+    """从预设响应列表中随机选择一条
+    
+    用于在LLM实际响应前给用户提供即时反馈，提升用户体验。
+    每次调用随机选择，确保用户看到的提示文本每次都不同。
+    
+    Args:
+        preset_list: 预设响应文本列表
+        
+    Returns:
+        str: 随机选择的预设响应文本
+    """
+    return random.choice(preset_list)
+
+
 def encode_image(image_path):
+    """将图片文件编码为Base64字符串
+    
+    读取本地图片文件并转换为Base64编码，用于在API请求中传输图片数据。
+    
+    Args:
+        image_path: 图片文件的本地路径
+        
+    Returns:
+        str: Base64编码后的图片字符串
+    """
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
+
 def should_continue(state: AgentState):
+    """判断工作流是否应该继续执行
+    
+    检查最后一条消息是否包含工具调用，决定下一步是执行工具还是结束流程。
+    
+    Args:
+        state: Agent状态对象，包含消息历史
+        
+    Returns:
+        str: "tools" 表示需要执行工具，END 表示流程结束
+    """
     messages = state["messages"]
     last_message = messages[-1]
+    # 检查最后一条消息是否包含工具调用请求
     if hasattr(last_message, "tool_calls") and last_message.tool_calls:
         return "tools"
     return END
 
+
 # --- Where to Eat Logic ---
-async def where_to_eat_node(state: AgentState):
+async def where_to_eat_node(state: AgentState, config: RunnableConfig):
+    """处理"去哪儿"功能的主节点，负责图片位置识别和流式输出。
+    
+    该节点接收用户上传的图片，调用 LLM 进行位置推理，并将思考过程
+    以 custom_event 形式派发，最终结果以 state update 形式返回。
+    """
+    import httpx
+    
     image_path = state.get("image_path")
-    # Check if image_path is a URL or local path
+    user_query = state.get("messages", [{}])[0].content if state.get("messages") else "这是哪里？"
+    
+    # 将图片转换为 Base64 编码
     if image_path.startswith("http"):
-        image_url = image_path
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(image_path, timeout=30.0)
+                response.raise_for_status()
+                image_data = base64.b64encode(response.content).decode("utf-8")
+                content_type = response.headers.get("content-type", "image/jpeg")
+                image_url = f"data:{content_type};base64,{image_data}"
+        except Exception as e:
+            yield {"messages": [AIMessage(
+                content=f"图片下载失败: {str(e)}",
+                additional_kwargs={"message": f"图片下载失败: {str(e)}"}
+            )]}
+            return
     else:
+        # Check if file exists to prevent errors
+        if not os.path.exists(image_path):
+             yield {"messages": [AIMessage(content="Image file not found")]}
+             return
         base64_image = encode_image(image_path)
         image_url = f"data:image/jpeg;base64,{base64_image}"
     
     base_url = os.getenv("OPENAI_API_BASE")
-    model = ChatOpenAI(model="gpt-4o", temperature=0, base_url=base_url) # Or appropriate model
+    # Using a standard model name if possible, or keep as is if known to work (assuming environment is set).
+    # Since we got a 500 before with 'fake image', we assume model connects.
+    model = ChatOpenAI(model="gemini-2.5-pro", temperature=0, base_url=base_url)
     
     messages = [
         SystemMessage(content=WHERE_TO_EAT_PROMPT),
         HumanMessage(content=[
-            {"type": "text", "text": "Where is this?"},
+            {"type": "text", "text": user_query},
             {"type": "image_url", "image_url": {"url": image_url}}
         ])
     ]
     
     response_content = ""
-    found_answer = False
-    found_json = False
+    thought_content = ""
+    print(f"[DEBUG] Starting where_to_eat_node with image: {image_path}")
+    
+    in_json_block = False
     
     try:
-        async for chunk in model.astream(messages):
+        # Pass config to astream to enable callbacks/tracing if needed by model,
+        # but primarily we use manual dispatch.
+        async for chunk in model.astream(messages, config=config):
             content = chunk.content
+            if not content:
+                continue
+            
             response_content += content
             
-            # Handle transitions within the chunk
-            if not found_json and "JSON:" in content:
-                parts = content.split("JSON:", 1)
-                # Process the part before JSON
-                pre_json = parts[0]
-                if pre_json:
-                    if found_answer:
-                        yield {"messages": [AIMessage(content=pre_json, additional_kwargs={"message": pre_json})]}
-                    else:
-                         # This case shouldn't happen if ANSWER comes before JSON, but just in case
-                        yield {"messages": [AIMessage(content=pre_json, additional_kwargs={"thought": pre_json})]}
-                
-                found_json = True
-                # We do not stream the part after JSON: as text
-                continue
-
-            if not found_answer and "ANSWER:" in content:
-                parts = content.split("ANSWER:", 1)
-                # Process the part before ANSWER (Thought)
-                thought_part = parts[0]
-                if thought_part:
-                    yield {"messages": [AIMessage(content=thought_part, additional_kwargs={"thought": thought_part})]}
-                
-                found_answer = True
-                # Process the part after ANSWER (Message)
-                message_part = parts[1]
-                if message_part:
-                    yield {"messages": [AIMessage(content=message_part, additional_kwargs={"message": message_part})]}
-                continue
-            
-            # Normal streaming
-            if found_json:
-                pass # Accumulate JSON content but don't stream as text
-            elif found_answer:
-                yield {"messages": [AIMessage(content=content, additional_kwargs={"message": content})]}
-            else:
-                yield {"messages": [AIMessage(content=content, additional_kwargs={"thought": content})]}
+            if not in_json_block:
+                if "```json" in response_content or "## 3. JSON" in response_content:
+                    in_json_block = True
+                    # Do not dispatch content that is part of the marker
+                else:
+                    if content: # Dispatch even if space
+                        await adispatch_custom_event("thought", {"content": content}, config=config)
+                        thought_content += content
 
     except Exception as e:
-        yield {"messages": [AIMessage(content=f"Error calling AI service: {str(e)}", additional_kwargs={"message": f"Error: {str(e)}"})]}
+        error_msg = f"AI 服务调用失败: {str(e)}"
+        yield {"messages": [AIMessage(
+            content=error_msg,
+            additional_kwargs={"message": error_msg}
+        )]}
         return
     
-    # Extract JSON from response_content
-    json_match = re.search(r'```json\n(.*?)\n```', response_content, re.DOTALL)
-    if json_match:
-        json_str = json_match.group(1)
-        try:
-            data = json.loads(json_str)
-            yield {
-                "messages": [
-                    AIMessage(content="Found it!", 
-                              additional_kwargs={
-                                  "function_call": {
-                                      "action": "open_map", 
-                                      "lat": data["latitude"], 
-                                      "lng": data["longitude"], 
-                                      "name": data["name"], 
-                                      "address": data["address"]
-                                  }
-                              })
-                ]
+    # ============ Extract JSON ============
+    print(f"[DEBUG] Full response length: {len(response_content)}")
+    
+    json_patterns = [
+        r'```json\s*(.*?)\s*```',
+        r'JSON:\s*(\{.*?\})',
+    ]
+    
+    json_data = None
+    for pattern in json_patterns:
+        json_match = re.search(pattern, response_content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+            try:
+                json_data = json.loads(json_str)
+                break
+            except json.JSONDecodeError:
+                continue
+    
+    final_messages = []
+    
+    # Add the full thought message for history/debug
+    if thought_content:
+        final_messages.append(AIMessage(
+            content=thought_content,
+            additional_kwargs={"thought": thought_content}
+        ))
+
+    if json_data:
+        final_messages.append(AIMessage(
+            content="位置已识别",
+            additional_kwargs={
+                "function_call": {
+                    "action": "open_map",
+                    "lat": json_data.get("latitude"),
+                    "lng": json_data.get("longitude"),
+                    "name": json_data.get("name", "未知地点"),
+                    "address": json_data.get("address", "地址未知")
+                }
             }
-        except json.JSONDecodeError:
-            print("Failed to parse JSON from LLM response")
-            yield {"messages": [AIMessage(content="Could not parse location data.")]}
+        ))
     else:
-        yield {"messages": [AIMessage(content="Could not find location data in response.")]}
+        final_messages.append(AIMessage(
+            content="未能从响应中提取位置信息。",
+            additional_kwargs={"message": "未能从响应中提取位置信息。"}
+        ))
+        
+    yield {"messages": final_messages}
 
 where_to_eat_workflow = StateGraph(AgentState)
 where_to_eat_workflow.add_node("agent", where_to_eat_node)
 where_to_eat_workflow.set_entry_point("agent")
 where_to_eat_workflow.add_edge("agent", END)
 where_to_eat_graph = where_to_eat_workflow.compile()
+
 
 
 # --- General Agent Logic (Legacy/Example) ---

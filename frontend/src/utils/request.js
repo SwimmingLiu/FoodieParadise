@@ -1,9 +1,52 @@
 /**
  * Custom request utility for WeChat Mini Program to support Chunked Transfer Encoding
- * Simulates SSE (Server-Sent Events) behavior
+ * Simulates SSE (Server-Sent Events) behavior with proper buffering
  */
 
-export const streamRequest = ({ url, method = 'GET', data = {}, header = {}, onChunk, onComplete, onError }) => {
+/**
+ * Parse SSE formatted text into structured events
+ * @param {string} text - Raw SSE text
+ * @returns {Array<{event: string, data: string}>} Parsed events
+ */
+const parseSSEEvents = (text) => {
+  const events = [];
+  // Split by double newline (SSE event delimiter)
+  const rawEvents = text.split(/\n\n/);
+  
+  for (const rawEvent of rawEvents) {
+    if (!rawEvent.trim()) continue;
+    
+    let event = 'message'; // default event type
+    let data = '';
+    
+    const lines = rawEvent.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        event = line.substring(7).trim();
+      } else if (line.startsWith('data: ')) {
+        data += line.substring(6);
+      } else if (line.startsWith('data:')) {
+        // Handle case where data: has no space after colon
+        data += line.substring(5);
+      }
+    }
+    
+    if (data) {
+      events.push({ event, data });
+    }
+  }
+  
+  return events;
+};
+
+/**
+ * Stream request with SSE support and proper buffering
+ * Handles chunked transfer encoding for WeChat Mini Program
+ */
+export const streamRequest = ({ url, method = 'GET', data = {}, header = {}, onEvent, onChunk, onComplete, onError }) => {
+  // Buffer for incomplete SSE events across chunks
+  let buffer = '';
+  
   const requestTask = wx.request({
     url,
     method,
@@ -14,7 +57,13 @@ export const streamRequest = ({ url, method = 'GET', data = {}, header = {}, onC
     },
     enableChunked: true, // Enable chunked transfer
     success: (res) => {
-      // This callback is triggered when the request is complete (but for chunked, we rely on onChunkReceived)
+      // Process any remaining buffer content
+      if (buffer.trim()) {
+        const events = parseSSEEvents(buffer);
+        for (const evt of events) {
+          if (onEvent) onEvent(evt.event, evt.data);
+        }
+      }
       if (onComplete) onComplete(res);
     },
     fail: (err) => {
@@ -25,12 +74,7 @@ export const streamRequest = ({ url, method = 'GET', data = {}, header = {}, onC
   // Listen for chunks
   requestTask.onChunkReceived((response) => {
     if (response.data) {
-      // response.data is ArrayBuffer
       const uint8Array = new Uint8Array(response.data);
-      // We need a TextDecoder to decode the ArrayBuffer. 
-      // Note: TextDecoder might not be available in all WeChat Mini Program environments directly.
-      // If not, we need a polyfill or a simple implementation.
-      // For modern WeChat base library, TextDecoder is supported.
 
       try {
         let text;
@@ -41,7 +85,28 @@ export const streamRequest = ({ url, method = 'GET', data = {}, header = {}, onC
           // Fallback for environments without TextDecoder
           text = decodeURIComponent(escape(String.fromCharCode(...uint8Array)));
         }
-        if (onChunk) onChunk(text);
+        
+        // Add to buffer
+        buffer += text;
+        
+        // Find complete SSE events (ending with \n\n)
+        const lastDoubleNewline = buffer.lastIndexOf('\n\n');
+        
+        if (lastDoubleNewline !== -1) {
+          // Extract complete events
+          const completeText = buffer.substring(0, lastDoubleNewline + 2);
+          // Keep incomplete part in buffer
+          buffer = buffer.substring(lastDoubleNewline + 2);
+          
+          // Parse and emit events
+          const events = parseSSEEvents(completeText);
+          for (const evt of events) {
+            if (onEvent) onEvent(evt.event, evt.data);
+          }
+          
+          // Also call legacy onChunk for backward compatibility
+          if (onChunk) onChunk(completeText);
+        }
       } catch (e) {
         console.error("Error decoding chunk:", e);
       }
@@ -50,5 +115,3 @@ export const streamRequest = ({ url, method = 'GET', data = {}, header = {}, onC
 
   return requestTask;
 };
-
-// Simple polyfill-like behavior if needed, but try standard approach first.
