@@ -138,15 +138,15 @@
                     <text class="result-arrow">›</text>
                 </view>
                 <view class="action-icons">
-                    <view class="action-icon-btn">
+                    <view class="action-icon-btn" @click="copyResult">
                         <text>📋</text>
                     </view>
-                    <view class="action-icon-btn">
+                    <view class="action-icon-btn" @click="regenerateResult">
                         <text>🔄</text>
                     </view>
-                    <view class="action-icon-btn">
+                    <button class="action-icon-btn share-btn" open-type="share">
                         <text>↗️</text>
-                    </view>
+                    </button>
                 </view>
             </view>
             <view v-else class="new-conversation-bar">
@@ -182,14 +182,14 @@
             
             <!-- Preset Questions -->
             <view class="preset-questions">
-                <view class="preset-btn" @click="selectPresetQuestion('在哪儿')">
-                    <text>在哪儿 →</text>
+                <view class="preset-btn" @click="selectPresetQuestion('店铺在哪儿')">
+                    <text>店铺在哪儿</text>
                 </view>
-                <view class="preset-btn" @click="selectPresetQuestion('推荐类似的地点')">
-                    <text>推荐类似的地点 →</text>
+                <view class="preset-btn" @click="selectPresetQuestion('哪儿可以买到')">
+                    <text>哪儿可以买到</text>
                 </view>
-                <view class="preset-btn" @click="selectPresetQuestion('哪里能买到')">
-                    <text>哪里能买到 →</text>
+                <view class="preset-btn" @click="selectPresetQuestion('杭州的类似店铺')">
+                    <text>杭州的类似店铺</text>
                 </view>
             </view>
             
@@ -204,7 +204,6 @@
             
             <!-- Submit Button -->
             <view class="modal-submit-btn" @click="submitWithQuestion">
-                <text class="submit-icon">🖼️</text>
                 <text class="submit-text">开始识别</text>
             </view>
         </view>
@@ -219,7 +218,8 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, onMounted } from 'vue';
+import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app';
 import { streamRequest } from '../../utils/request.js';
 import mpHtml from 'mp-html/dist/uni-app/components/mp-html/mp-html.vue';
 import { marked } from 'marked';
@@ -291,6 +291,13 @@ const isBannerClick = ref(false);  // 标记是否是轮播图点击
 const isRecognizing = ref(false);  // 是否正在识别中
 const showNewConversation = ref(false);  // 是否显示新会话按钮
 let currentRequestTask = null;  // 当前请求任务引用，用于停止
+
+// 保存最后一次查询信息，用于重新生成
+let lastQuery = ref({
+    image: null,
+    remoteFilePath: null,
+    question: ''
+});
 
 // Actions
 const onSwiperChange = (e) => {
@@ -554,40 +561,32 @@ const sendMessage = () => {
             // Mark thinking as complete
             messages.value[aiMsgIndex].isThinking = false;
 
-            // Check for raw JSON in result and convert to map card
-            const jsonPattern = /json\s*(\{[\s\S]*?\})/;
-            const match = completeResult.match(jsonPattern);
-            if (match) {
-                try {
-                    const jsonStr = match[1];
-                    const mapData = JSON.parse(jsonStr);
-                    
-                    // Add to maps if valid
-                    if (mapData.name) {
-                         if (!messages.value[aiMsgIndex].maps) {
-                            messages.value[aiMsgIndex].maps = [];
-                         }
-                         
-                         // Deduplication check
-                         const isDuplicate = messages.value[aiMsgIndex].maps.some(existingMap => {
-                            return existingMap.name === mapData.name;
-                         });
-                         
-                         if (!isDuplicate) {
-                             messages.value[aiMsgIndex].maps.push(mapData);
-                             // Set legacy single map
-                             if (!messages.value[aiMsgIndex].map) {
-                                 messages.value[aiMsgIndex].map = mapData;
-                             }
-                         }
-                         
-                         // Remove JSON from text content
-                         const cleanContent = completeResult.replace(match[0], '').trim();
-                         messages.value[aiMsgIndex].content = cleanContent;
-                    }
-                } catch (e) {
-                    console.error("JSON parse error from text:", e);
+            // Extract and parse location JSON from result content
+            // Handle multiple formats: ```json...```, escaped JSON with \", regular JSON
+            const extractedLocation = extractLocationFromContent(completeResult);
+            
+            if (extractedLocation.mapData) {
+                // Add to maps if valid (must have name field)
+                if (!messages.value[aiMsgIndex].maps) {
+                    messages.value[aiMsgIndex].maps = [];
                 }
+                
+                // Deduplication check
+                const isDuplicate = messages.value[aiMsgIndex].maps.some(existingMap => {
+                    return existingMap.name === extractedLocation.mapData.name;
+                });
+                
+                if (!isDuplicate) {
+                    messages.value[aiMsgIndex].maps.push(extractedLocation.mapData);
+                    // Set legacy single map
+                    if (!messages.value[aiMsgIndex].map) {
+                        messages.value[aiMsgIndex].map = extractedLocation.mapData;
+                    }
+                }
+                
+                // Remove JSON from text content
+                messages.value[aiMsgIndex].content = extractedLocation.cleanContent;
+                console.log('Successfully parsed location:', extractedLocation.mapData.name);
             }
             
             // Print complete thinking process and result to console
@@ -614,12 +613,80 @@ const sendMessage = () => {
         }
     });
 
+    // 保存最后一次查询信息
+    lastQuery.value = {
+        image: currentImage.value,
+        remoteFilePath: currentRemoteFilePath.value,
+        question: query
+    };
+
     // Clear input
     inputText.value = '';
     // We keep the image and remote path for context? Or clear?
     // Usually clear for next query.
     currentImage.value = null;
     currentRemoteFilePath.value = null;
+};
+
+/**
+ * 复制AI结果到剪贴板
+ */
+const copyResult = () => {
+    // 获取最新的AI消息内容
+    const aiMessages = messages.value.filter(msg => msg.role === 'ai');
+    if (aiMessages.length === 0) {
+        uni.showToast({ title: '暂无内容可复制', icon: 'none' });
+        return;
+    }
+    
+    const lastAiMsg = aiMessages[aiMessages.length - 1];
+    const content = lastAiMsg.content || '';
+    
+    if (!content) {
+        uni.showToast({ title: '暂无内容可复制', icon: 'none' });
+        return;
+    }
+    
+    uni.setClipboardData({
+        data: content,
+        success: () => {
+            uni.showToast({ title: '已复制到剪贴板', icon: 'success' });
+        },
+        fail: () => {
+            uni.showToast({ title: '复制失败', icon: 'none' });
+        }
+    });
+};
+
+/**
+ * 重新生成结果
+ */
+const regenerateResult = () => {
+    if (!lastQuery.value.remoteFilePath) {
+        uni.showToast({ title: '请先上传图片', icon: 'none' });
+        return;
+    }
+    
+    if (isRecognizing.value) {
+        uni.showToast({ title: '正在识别中...', icon: 'none' });
+        return;
+    }
+    
+    // 恢复上次查询信息
+    currentImage.value = lastQuery.value.image;
+    currentRemoteFilePath.value = lastQuery.value.remoteFilePath;
+    inputText.value = lastQuery.value.question;
+    
+    // 移除上一个AI回复（用于重新生成）
+    if (messages.value.length > 0) {
+        const lastMsg = messages.value[messages.value.length - 1];
+        if (lastMsg.role === 'ai') {
+            messages.value.pop();
+        }
+    }
+    
+    // 重新发送请求
+    sendMessage();
 };
 
 const scrollToBottom = () => {
@@ -710,6 +777,109 @@ const decodeHTMLEntities = (text) => {
     result = result.replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
     
     return result;
+};
+
+/**
+ * Extract location JSON from content and return parsed data with cleaned content
+ * Handles multiple JSON formats:
+ * 1. Markdown code blocks: ```json {...} ```
+ * 2. Escaped JSON with \" quotes
+ * 3. Regular JSON with " quotes
+ * @param {string} content - Content that may contain location JSON
+ * @returns {{mapData: Object|null, cleanContent: string}} Parsed map data and cleaned content
+ */
+const extractLocationFromContent = (content) => {
+    if (!content) return { mapData: null, cleanContent: content };
+    
+    let jsonStr = null;
+    let matchedText = null;
+    let mapData = null;
+    
+    // Pattern 1: Match ```json ... ``` markdown code blocks
+    const codeBlockMatch = content.match(/```json\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+        matchedText = codeBlockMatch[0];
+    }
+    
+    // Pattern 2: If no code block, look for JSON object starting with { and containing "name"
+    if (!jsonStr) {
+        // Match JSON that starts with { and contains name, address, latitude, longitude
+        // Handle both escaped (\\" or \") and regular (") quotes
+        const jsonObjectMatch = content.match(/\{[\s\S]*?["\\]name["\\][\s\S]*?["\\]longitude["\\]\s*:\s*[\d.-]+\s*\}/);
+        if (jsonObjectMatch) {
+            jsonStr = jsonObjectMatch[0];
+            matchedText = jsonObjectMatch[0];
+        }
+    }
+    
+    // Pattern 3: Try to find any JSON-like structure with name field
+    if (!jsonStr) {
+        // Look for {"name": or {\"name\":
+        const simpleMatch = content.match(/\{\s*(?:\\"|")?name(?:\\"|")?\s*:\s*(?:\\"|")?[^}]+\}/);
+        if (simpleMatch) {
+            jsonStr = simpleMatch[0];
+            matchedText = simpleMatch[0];
+        }
+    }
+    
+    if (jsonStr) {
+        try {
+            // Clean up the JSON string
+            let cleanedJsonStr = jsonStr
+                // Remove literal \n (backslash followed by n)
+                .replace(/\\n/g, ' ')
+                // Replace escaped quotes \" with regular quotes "
+                .replace(/\\"/g, '"')
+                // Replace double backslashes with single
+                .replace(/\\\\/g, '\\')
+                // Clean up any markdown artifacts
+                .replace(/\*\*/g, '')
+                .trim();
+            
+            console.log('Attempting to parse JSON:', cleanedJsonStr);
+            mapData = JSON.parse(cleanedJsonStr);
+            
+            // Validate that we have required fields
+            if (!mapData.name) {
+                console.log('JSON parsed but no name field found');
+                mapData = null;
+            }
+        } catch (e) {
+            console.error('JSON parse error:', e.message);
+            console.error('Original JSON string:', jsonStr);
+            
+            // Fallback: Try to extract data using regex if JSON parsing fails
+            try {
+                const nameMatch = jsonStr.match(/["\\]?name["\\]?\s*:\s*["\\]?([^"\\,}]+)["\\]?/);
+                const addressMatch = jsonStr.match(/["\\]?address["\\]?\s*:\s*["\\]?([^"\\,}]+)["\\]?/);
+                const latMatch = jsonStr.match(/["\\]?latitude["\\]?\s*:\s*([\d.-]+)/);
+                const lngMatch = jsonStr.match(/["\\]?longitude["\\]?\s*:\s*([\d.-]+)/);
+                
+                if (nameMatch) {
+                    mapData = {
+                        name: nameMatch[1].trim(),
+                        address: addressMatch ? addressMatch[1].trim() : '',
+                        latitude: latMatch ? parseFloat(latMatch[1]) : 0,
+                        longitude: lngMatch ? parseFloat(lngMatch[1]) : 0
+                    };
+                    console.log('Extracted location via regex fallback:', mapData.name);
+                }
+            } catch (fallbackError) {
+                console.error('Fallback extraction also failed:', fallbackError);
+            }
+        }
+    }
+    
+    // Create clean content by removing the matched JSON text
+    let cleanContent = content;
+    if (matchedText && mapData) {
+        cleanContent = content.replace(matchedText, '').trim();
+        // Also clean up any remaining empty code block markers
+        cleanContent = cleanContent.replace(/```\s*```/g, '').trim();
+    }
+    
+    return { mapData, cleanContent };
 };
 
 /**
@@ -819,6 +989,67 @@ const getCurrentStep = (content) => {
     }
     return '思考中...';
 };
+
+/**
+ * 配置微信分享给朋友
+ */
+onShareAppMessage(() => {
+    // 获取最新的AI消息内容作为分享摘要
+    const aiMessages = messages.value.filter(msg => msg.role === 'ai');
+    let shareTitle = '看看这家店在哪里！';
+    let shareDesc = 'AI智能识别餐厅位置';
+    let imageUrl = '/static/where_to_eat_logo.png';
+    
+    if (aiMessages.length > 0) {
+        const lastAiMsg = aiMessages[aiMessages.length - 1];
+        // 提取店铺名称作为标题
+        if (lastAiMsg.maps && lastAiMsg.maps.length > 0) {
+            shareTitle = `🍽️ ${lastAiMsg.maps[0].name || '美食探店'}`;
+        } else if (lastAiMsg.map && lastAiMsg.map.name) {
+            shareTitle = `🍽️ ${lastAiMsg.map.name}`;
+        }
+        // 提取内容摘要
+        if (lastAiMsg.content) {
+            shareDesc = lastAiMsg.content.substring(0, 50).replace(/[#*`\n]/g, '') + '...';
+        }
+    }
+    
+    // 获取用户上传的图片作为分享图片
+    const userMessages = messages.value.filter(msg => msg.role === 'user' && msg.image);
+    if (userMessages.length > 0) {
+        imageUrl = userMessages[userMessages.length - 1].image;
+    }
+    
+    return {
+        title: shareTitle,
+        desc: shareDesc,
+        path: '/pages/where-to-eat/index',
+        imageUrl: imageUrl
+    };
+});
+
+/**
+ * 配置分享到朋友圈
+ */
+onShareTimeline(() => {
+    const aiMessages = messages.value.filter(msg => msg.role === 'ai');
+    let shareTitle = '看看这家店在哪里！';
+    
+    if (aiMessages.length > 0) {
+        const lastAiMsg = aiMessages[aiMessages.length - 1];
+        if (lastAiMsg.maps && lastAiMsg.maps.length > 0) {
+            shareTitle = `🍽️ ${lastAiMsg.maps[0].name || '美食探店'}`;
+        } else if (lastAiMsg.map && lastAiMsg.map.name) {
+            shareTitle = `🍽️ ${lastAiMsg.map.name}`;
+        }
+    }
+    
+    return {
+        title: shareTitle,
+        query: '',
+        imageUrl: '/static/where_to_eat_logo.png'
+    };
+});
 </script>
 
 <style>
@@ -1439,11 +1670,13 @@ const getCurrentStep = (content) => {
 
 .upload-modal {
     width: 100%;
+    max-height: 85vh;
     background-color: #fff;
     border-radius: 32rpx 32rpx 0 0;
-    padding: 40rpx 32rpx;
-    padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+    padding: 32rpx 32rpx;
+    padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
     position: relative;
+    overflow-y: auto;
 }
 
 .modal-close {
@@ -1468,11 +1701,11 @@ const getCurrentStep = (content) => {
 
 .modal-image-preview {
     width: 100%;
-    height: 400rpx;
+    height: 320rpx;
     border-radius: 20rpx;
     overflow: hidden;
     position: relative;
-    margin-bottom: 32rpx;
+    margin-bottom: 24rpx;
 }
 
 .preview-image {
@@ -1505,17 +1738,18 @@ const getCurrentStep = (content) => {
 
 .preset-questions {
     display: flex;
-    flex-wrap: wrap;
-    gap: 16rpx;
-    margin-bottom: 24rpx;
+    flex-wrap: nowrap;
+    gap: 12rpx;
+    margin-bottom: 20rpx;
 }
 
 .preset-btn {
-    padding: 16rpx 28rpx;
+    padding: 12rpx 18rpx;
     background-color: #f5f5f5;
-    border-radius: 40rpx;
+    border-radius: 32rpx;
     border: 1px solid #e8e8e8;
     transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
 .preset-btn:active {
@@ -1524,19 +1758,20 @@ const getCurrentStep = (content) => {
 }
 
 .preset-btn text {
-    font-size: 28rpx;
+    font-size: 24rpx;
     color: #333;
+    white-space: nowrap;
 }
 
 .modal-input-area {
-    margin-bottom: 32rpx;
+    margin-bottom: 20rpx;
 }
 
 .modal-input {
     width: 100%;
-    height: 88rpx;
+    height: 80rpx;
     background-color: #f5f5f5;
-    border-radius: 44rpx;
+    border-radius: 40rpx;
     padding: 0 32rpx;
     font-size: 28rpx;
     border: 1px solid #e8e8e8;
@@ -1547,9 +1782,9 @@ const getCurrentStep = (content) => {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 100rpx;
+    height: 88rpx;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 50rpx;
+    border-radius: 44rpx;
     box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.3);
 }
 
@@ -1790,6 +2025,18 @@ const getCurrentStep = (content) => {
 
 .action-icon-btn text {
     font-size: 32rpx;
+}
+
+/* 分享按钮样式 - 重置button默认样式 */
+.share-btn {
+    padding: 0;
+    margin: 0;
+    line-height: normal;
+    background-color: #f8f8f8;
+}
+
+.share-btn::after {
+    border: none;
 }
 
 /* 新对话按钮 */

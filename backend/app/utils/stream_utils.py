@@ -47,8 +47,10 @@ class ContentSplitter:
     # 定义标记正则表达式（匹配 prompts.py 中的 JSON 样式标记）
     # 匹配 {"reason-content":" 或 { "reason-content" : "（开始标记）
     REASON_START_PATTERN = re.compile(r'\{\s*"reason-content"\s*:\s*"', re.IGNORECASE)
-    # 匹配 {"answer":" 或 { "answer" : "（开始标记）
+    # 匹配 {"answer":" 或 { "answer" : "（开始标记，带 { 前缀）
     ANSWER_START_PATTERN = re.compile(r'\{\s*"answer"\s*:\s*"', re.IGNORECASE)
+    # 匹配 "answer":" 作为 JSON 对象内部字段（不带 { 前缀，用于 reason-content 后直接跟 answer 的情况）
+    ANSWER_INLINE_PATTERN = re.compile(r'[,}]?\s*"answer"\s*:\s*"', re.IGNORECASE)
     # 匹配 JSON 块结束标记 "}（注意：需要排除 json 代码块中的嵌套情况）
     BLOCK_END_PATTERN = re.compile(r'"\s*\}')
     
@@ -171,24 +173,35 @@ class ContentSplitter:
             
             elif self.current_state == self.STATE_THINKING:
                 # 思考阶段：寻找 JSON 块结束标记 "} 或 answer 开始标记
-                # 先检查是否有 answer 标记（reason-content 块可能直接切换到 answer 块）
+                # 同时检查带 { 前缀和不带 { 前缀的 answer 标记
                 answer_match = self.ANSWER_START_PATTERN.search(self.buffer)
+                answer_inline_match = self.ANSWER_INLINE_PATTERN.search(self.buffer)
+                
+                # 选择位置更靠前的 answer 匹配
+                effective_answer_match = None
+                if answer_match and answer_inline_match:
+                    effective_answer_match = answer_match if answer_match.start() < answer_inline_match.start() else answer_inline_match
+                elif answer_match:
+                    effective_answer_match = answer_match
+                elif answer_inline_match:
+                    effective_answer_match = answer_inline_match
                 
                 # 查找 JSON 块结束标记 "}
                 # 注意：需要找到最外层的 "}，而不是嵌套 JSON 中的
                 end_match = self._find_json_block_end(self.buffer)
                 
-                if answer_match and (end_match is None or answer_match.start() < end_match.start()):
+                if effective_answer_match and (end_match is None or effective_answer_match.start() < end_match.start()):
                     # 遇到 answer 标记，先发射当前思考内容，然后切换状态
-                    content = self.buffer[:answer_match.start()]
+                    content = self.buffer[:effective_answer_match.start()]
                     if content.strip():
                         events.append({"type": "thought", "content": content})
                         self.thought_buffer += content
                     
-                    self.buffer = self.buffer[answer_match.end():]
+                    self.buffer = self.buffer[effective_answer_match.end():]
                     self.current_state = self.STATE_ANSWER
                     self.block_content = ""
                     continue
+
                 
                 elif end_match is not None:
                     # 找到思考块结束标记
@@ -241,6 +254,16 @@ class ContentSplitter:
                 # 代码块外部：寻找新的标记
                 reason_match = self.REASON_START_PATTERN.search(self.buffer)
                 answer_match = self.ANSWER_START_PATTERN.search(self.buffer)
+                answer_inline_match = self.ANSWER_INLINE_PATTERN.search(self.buffer)
+                
+                # 选择位置更靠前的 answer 匹配
+                effective_answer_match = None
+                if answer_match and answer_inline_match:
+                    effective_answer_match = answer_match if answer_match.start() < answer_inline_match.start() else answer_inline_match
+                elif answer_match:
+                    effective_answer_match = answer_match
+                elif answer_inline_match:
+                    effective_answer_match = answer_inline_match
                 
                 if reason_match:
                     before = self.buffer[:reason_match.start()]
@@ -251,12 +274,12 @@ class ContentSplitter:
                     self.current_state = self.STATE_THINKING
                     continue
                 
-                elif answer_match:
-                    before = self.buffer[:answer_match.start()]
+                elif effective_answer_match:
+                    before = self.buffer[:effective_answer_match.start()]
                     if before.strip():
                         events.append({"type": "message", "content": before})
                     
-                    self.buffer = self.buffer[answer_match.end():]
+                    self.buffer = self.buffer[effective_answer_match.end():]
                     self.current_state = self.STATE_ANSWER
                     continue
                 

@@ -333,175 +333,451 @@ where_to_eat_graph = where_to_eat_workflow.compile()
 
 # ========== 查预制功能逻辑 ==========
 
-async def check_premade_node(state: AgentState):
-    """处理"查预制"功能的主节点
+# ========== 查预制功能逻辑 ==========
+
+async def visual_analysis_node(state: AgentState, config: RunnableConfig):
+    """视觉分析节点：分析物理特征"""
+    from app.constants.prompts import VISUAL_ANALYSIS_PROMPT
+    import httpx
     
-    分析图片中的菜品是否为预制菜，先返回预设响应，
-    然后调用工具进行实际分析。
+    image_path = state.get("image_path")
+    # ... Image processing (reuse duplicated code or refactor utils later) ...
+    # For brevity, assuming image_path is handled (reuse logic or helper)
     
-    Args:
-        state: Agent状态对象，包含图片路径和消息历史
-        
-    Returns:
-        dict: 包含消息更新的状态字典
-    """
-    # 发送预设响应
+    # Helper for image url (Duplicate logic reduction recommended for production)
+    image_url = ""
+    if image_path.startswith("http"):
+        async with httpx.AsyncClient() as client:
+            response = await client.get(image_path, timeout=30.0)
+            image_data = base64.b64encode(response.content).decode("utf-8")
+            image_url = f"data:image/jpeg;base64,{image_data}"
+    else:
+        if os.path.exists(image_path):
+            base64_image = encode_image(image_path)
+            image_url = f"data:image/jpeg;base64,{base64_image}"
+            
+    llm_config = settings.llm
+    model = ChatOpenAI(model=llm_config.default_model, base_url=llm_config.openai_api_base, api_key=llm_config.openai_api_key)
+    
+    messages = [
+        SystemMessage(content=VISUAL_ANALYSIS_PROMPT),
+        HumanMessage(content=[
+            {"type": "text", "text": "分析这张图片"},
+            {"type": "image_url", "image_url": {"url": image_url}}
+        ])
+    ]
+    
+    response = await model.ainvoke(messages)
+    await adispatch_custom_event("thought", {"content": "正在分析视觉特征（色泽、质地）...\n"}, config=config)
+    return {"visual_report": response.content}
+
+
+async def process_analysis_node(state: AgentState, config: RunnableConfig):
+    """工艺分析节点：分析工业化痕迹"""
+    from app.constants.prompts import PROCESS_ANALYSIS_PROMPT
+    import httpx
+    
+    image_path = state.get("image_path")
+    # Helper for image url
+    image_url = ""
+    if image_path.startswith("http"):
+        async with httpx.AsyncClient() as client:
+            response = await client.get(image_path, timeout=30.0)
+            image_data = base64.b64encode(response.content).decode("utf-8")
+            image_url = f"data:image/jpeg;base64,{image_data}"
+    else:
+        if os.path.exists(image_path):
+            base64_image = encode_image(image_path)
+            image_url = f"data:image/jpeg;base64,{base64_image}"
+            
+    llm_config = settings.llm
+    model = ChatOpenAI(model=llm_config.default_model, base_url=llm_config.openai_api_base, api_key=llm_config.openai_api_key)
+    
+    messages = [
+        SystemMessage(content=PROCESS_ANALYSIS_PROMPT),
+        HumanMessage(content=[
+            {"type": "text", "text": "分析这张图片"},
+            {"type": "image_url", "image_url": {"url": image_url}}
+        ])
+    ]
+    
+    response = await model.ainvoke(messages)
+    await adispatch_custom_event("thought", {"content": "正在推测制作工艺（锅气、工业痕迹）...\n"}, config=config)
+    return {"process_report": response.content}
+
+
+async def check_premade_aggregator_node(state: AgentState, config: RunnableConfig):
+    """聚合节点：汇总分析并输出最终报告"""
+    from app.constants.prompts import CHECK_PREMADE_MAIN_PROMPT
+    
+    visual_report = state.get("visual_report", "未获取到视觉分析")
+    process_report = state.get("process_report", "未获取到工艺分析")
+    
+    # Send preset thought
     preset_text = get_preset_response(CHECK_PREMADE_PRESETS)
+    await adispatch_custom_event("thought", {"content": f"{preset_text}\n正在综合多维度分析结果..."}, config=config)
     
-    messages = state["messages"]
-    return {
-        "messages": [
-            AIMessage(
-                content=preset_text,
-                additional_kwargs={"thought": preset_text}
-            ),
-            AIMessage(
-                content="",
-                tool_calls=[{
-                    "name": "analyze_premade",
-                    "args": {"image_path": state["image_path"]},
-                    "id": "call_2"
-                }]
-            )
-        ]
-    }
+    llm_config = settings.llm
+    model = ChatOpenAI(model=llm_config.default_model, base_url=llm_config.openai_api_base, api_key=llm_config.openai_api_key)
+    
+    messages = [
+        SystemMessage(content=CHECK_PREMADE_MAIN_PROMPT),
+        HumanMessage(content=f"【视觉分析报告】\n{visual_report}\n\n【工艺分析报告】\n{process_report}")
+    ]
+    
+    # Initialize splitter
+    splitter = ContentSplitter()
+    response_content = ""
+    
+    try:
+        async for chunk in model.astream(messages, config=config):
+            chunk_content = ""
+            if chunk.content:
+                chunk_content = chunk.content
+                
+            if chunk_content:
+                response_content += chunk_content
+                # Direct streaming to message event
+                await adispatch_custom_event("message", {"content": chunk_content}, config=config)
+                
+    except Exception as e:
+        error_msg = f"聚合分析失败: {str(e)}"
+        return {"messages": [AIMessage(content=error_msg)]}
 
-
-async def premade_tools_node(state: AgentState):
-    """执行预制菜分析工具
-    
-    调用analyze_premade工具，解析结果并格式化为用户友好的报告。
-    
-    Args:
-        state: Agent状态对象
-        
-    Returns:
-        dict: 包含分析报告的消息更新
-    """
-    messages = state["messages"]
-    last_message = messages[-1]
-    
-    # 检查是否有工具调用
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        tool_call = last_message.tool_calls[0]
-        if tool_call["name"] == "analyze_premade":
-            # 调用分析工具
-            result = analyze_premade.invoke(tool_call["args"])
-            data = json.loads(result)
-            
-            # 构建分析报告
-            report = f"**菜品名称**: {data['dish_name']}\n"
-            report += f"**预制概率**: {data['score']}%\n"
-            report += f"**新鲜度**: {data['freshness']}\n"
-            report += "**分析依据**:\n" + "\n".join([f"- {r}" for r in data['reasons']])
-            
-            return {
-                "messages": [
-                    AIMessage(
-                        content=report,
-                        additional_kwargs={"message": report}
-                    )
-                ]
-            }
-    return {"messages": []}
+    # Final message construction (optional, as we streamed)
+    return {"messages": [AIMessage(content=response_content)]}
 
 
 # 构建"查预制"工作流图
 premade_workflow = StateGraph(AgentState)
-premade_workflow.add_node("agent", check_premade_node)
-premade_workflow.add_node("tools", premade_tools_node)
-premade_workflow.set_entry_point("agent")
-premade_workflow.add_conditional_edges("agent", should_continue)
-premade_workflow.add_edge("tools", END)
+
+# Add nodes
+premade_workflow.add_node("visual_analysis", visual_analysis_node)
+premade_workflow.add_node("process_analysis", process_analysis_node)
+premade_workflow.add_node("aggregator", check_premade_aggregator_node)
+
+# Set entry point to broadcast to parallel nodes
+premade_workflow.set_entry_point("visual_analysis") # LangGraph requires one entry, but we can fan out?
+# Actually LangGraph entry point can be one node. To fan out, we usually have a 'start' node or just connect entry to multiple?
+# Limitation: Entry point must be single node.
+# Strategy: Add a dummy 'start' node that does nothing but pass state, OR just chain:
+# Start -> (Visual | Process) -> Aggregator
+# Let's add a simple router/start node to facilitate parallel execution properly.
+
+async def start_node(state: AgentState):
+    return {}
+
+premade_workflow.add_node("start", start_node)
+premade_workflow.set_entry_point("start")
+
+# Fan out from start
+premade_workflow.add_edge("start", "visual_analysis")
+premade_workflow.add_edge("start", "process_analysis")
+
+# Fan in to aggregator
+premade_workflow.add_edge("visual_analysis", "aggregator")
+premade_workflow.add_edge("process_analysis", "aggregator")
+
+premade_workflow.add_edge("aggregator", END)
+
 premade_graph = premade_workflow.compile()
 
 
 # ========== 吃多少功能逻辑 ==========
 
-async def calories_node(state: AgentState):
-    """处理"吃多少"功能的主节点
+# 并发节点1：食物识别
+async def food_identification_node(state: AgentState, config: RunnableConfig):
+    """食物识别节点：识别图片中的所有食物
     
-    识别图片中的食物并计算热量，先返回预设响应，
-    然后调用工具进行实际分析。
-    
-    Args:
-        state: Agent状态对象，包含图片路径和消息历史
-        
-    Returns:
-        dict: 包含消息更新的状态字典
-    """
-    # 发送预设响应
-    preset_text = get_preset_response(CALORIES_PRESETS)
-    
-    messages = state["messages"]
-    return {
-        "messages": [
-            AIMessage(
-                content=preset_text,
-                additional_kwargs={"thought": preset_text}
-            ),
-            AIMessage(
-                content="",
-                tool_calls=[{
-                    "name": "analyze_calories",
-                    "args": {"image_path": state["image_path"]},
-                    "id": "call_3"
-                }]
-            )
-        ]
-    }
-
-
-async def calories_tools_node(state: AgentState):
-    """执行热量分析工具
-    
-    调用analyze_calories工具，解析结果并格式化为热量报告。
+    分析图片中的食物种类、份量、烹饪方式等信息。
     
     Args:
         state: Agent状态对象
+        config: LangChain运行配置
         
     Returns:
-        dict: 包含热量报告的消息更新
+        dict: 包含食物识别结果的状态更新
     """
-    messages = state["messages"]
-    last_message = messages[-1]
+    from app.constants.prompts import FOOD_IDENTIFICATION_PROMPT
+    import httpx
     
-    # 检查是否有工具调用
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        tool_call = last_message.tool_calls[0]
-        if tool_call["name"] == "analyze_calories":
-            # 调用分析工具
-            result = analyze_calories.invoke(tool_call["args"])
-            data = json.loads(result)
-            
-            # 构建热量报告
-            report = f"**总热量**: {data['total_calories']} 千卡\n\n"
-            for item in data['items']:
-                report += f"- **{item['name']}**: {item['calories']} 千卡\n"
-            report += f"\n**建议**: {data['advice']}"
-            
-            return {
-                "messages": [
-                    AIMessage(
-                        content=report,
-                        additional_kwargs={
-                            "message": report,
-                            "function_call": {
-                                "action": "annotate_image",
-                                "items": data['items']
-                            }
-                        }
-                    )
-                ]
-            }
-    return {"messages": []}
+    image_path = state.get("image_path")
+    
+    # 处理图片URL
+    image_url = ""
+    if image_path.startswith("http"):
+        async with httpx.AsyncClient() as client:
+            response = await client.get(image_path, timeout=30.0)
+            image_data = base64.b64encode(response.content).decode("utf-8")
+            image_url = f"data:image/jpeg;base64,{image_data}"
+    else:
+        if os.path.exists(image_path):
+            base64_image = encode_image(image_path)
+            image_url = f"data:image/jpeg;base64,{base64_image}"
+    
+    llm_config = settings.llm
+    model = ChatOpenAI(
+        model=llm_config.default_model,
+        base_url=llm_config.openai_api_base,
+        api_key=llm_config.openai_api_key
+    )
+    
+    messages = [
+        SystemMessage(content=FOOD_IDENTIFICATION_PROMPT),
+        HumanMessage(content=[
+            {"type": "text", "text": "请识别这张图片中的所有食物"},
+            {"type": "image_url", "image_url": {"url": image_url}}
+        ])
+    ]
+    
+    response = await model.ainvoke(messages)
+    await adispatch_custom_event("thought", {"content": "🍽️ 正在识别图片中的食物...\n"}, config=config)
+    return {"food_report": response.content}
 
 
-# 构建"吃多少"工作流图
+# 并发节点2：热量估算
+async def calorie_estimation_node(state: AgentState, config: RunnableConfig):
+    """热量估算节点：估算每种食物的热量
+    
+    根据食物种类和份量计算热量值。
+    
+    Args:
+        state: Agent状态对象
+        config: LangChain运行配置
+        
+    Returns:
+        dict: 包含热量估算结果的状态更新
+    """
+    from app.constants.prompts import CALORIE_ESTIMATION_PROMPT
+    import httpx
+    
+    image_path = state.get("image_path")
+    
+    # 处理图片URL
+    image_url = ""
+    if image_path.startswith("http"):
+        async with httpx.AsyncClient() as client:
+            response = await client.get(image_path, timeout=30.0)
+            image_data = base64.b64encode(response.content).decode("utf-8")
+            image_url = f"data:image/jpeg;base64,{image_data}"
+    else:
+        if os.path.exists(image_path):
+            base64_image = encode_image(image_path)
+            image_url = f"data:image/jpeg;base64,{base64_image}"
+    
+    llm_config = settings.llm
+    model = ChatOpenAI(
+        model=llm_config.default_model,
+        base_url=llm_config.openai_api_base,
+        api_key=llm_config.openai_api_key
+    )
+    
+    messages = [
+        SystemMessage(content=CALORIE_ESTIMATION_PROMPT),
+        HumanMessage(content=[
+            {"type": "text", "text": "请估算图片中每种食物的热量"},
+            {"type": "image_url", "image_url": {"url": image_url}}
+        ])
+    ]
+    
+    response = await model.ainvoke(messages)
+    await adispatch_custom_event("thought", {"content": "🔢 正在估算食物热量...\n"}, config=config)
+    return {"calorie_report": response.content}
+
+
+# 并发节点3：运动消耗估算
+async def exercise_estimation_node(state: AgentState, config: RunnableConfig):
+    """运动消耗估算节点：计算消耗热量所需的运动量
+    
+    将热量转换为具体的运动时间建议。
+    
+    Args:
+        state: Agent状态对象
+        config: LangChain运行配置
+        
+    Returns:
+        dict: 包含运动消耗结果的状态更新
+    """
+    from app.constants.prompts import EXERCISE_ESTIMATION_PROMPT
+    import httpx
+    
+    image_path = state.get("image_path")
+    
+    # 处理图片URL
+    image_url = ""
+    if image_path.startswith("http"):
+        async with httpx.AsyncClient() as client:
+            response = await client.get(image_path, timeout=30.0)
+            image_data = base64.b64encode(response.content).decode("utf-8")
+            image_url = f"data:image/jpeg;base64,{image_data}"
+    else:
+        if os.path.exists(image_path):
+            base64_image = encode_image(image_path)
+            image_url = f"data:image/jpeg;base64,{base64_image}"
+    
+    llm_config = settings.llm
+    model = ChatOpenAI(
+        model=llm_config.default_model,
+        base_url=llm_config.openai_api_base,
+        api_key=llm_config.openai_api_key
+    )
+    
+    messages = [
+        SystemMessage(content=EXERCISE_ESTIMATION_PROMPT),
+        HumanMessage(content=[
+            {"type": "text", "text": "请计算消耗这些食物热量所需的运动量"},
+            {"type": "image_url", "image_url": {"url": image_url}}
+        ])
+    ]
+    
+    response = await model.ainvoke(messages)
+    await adispatch_custom_event("thought", {"content": "🏃 正在计算运动消耗...\n"}, config=config)
+    return {"exercise_report": response.content}
+
+
+# 聚合节点：汇总分析并输出最终报告
+async def calories_aggregator_node(state: AgentState, config: RunnableConfig):
+    """聚合节点：汇总所有分析结果并生成最终报告
+    
+    根据食物识别、热量估算、运动消耗报告生成综合分析报告。
+    
+    Args:
+        state: Agent状态对象，包含各节点分析结果
+        config: LangChain运行配置
+        
+    Returns:
+        dict: 包含最终报告的状态更新
+    """
+    from app.constants.prompts import CALORIES_MAIN_PROMPT
+    
+    food_report = state.get("food_report", "未获取到食物识别报告")
+    calorie_report = state.get("calorie_report", "未获取到热量估算报告")
+    exercise_report = state.get("exercise_report", "未获取到运动消耗报告")
+    meal_time = state.get("meal_time", "午餐")
+    
+    # 发送预设思考
+    preset_text = get_preset_response(CALORIES_PRESETS)
+    await adispatch_custom_event("thought", {"content": f"{preset_text}\n⏰ 正在综合分析结果..."}, config=config)
+    
+    llm_config = settings.llm
+    model = ChatOpenAI(
+        model=llm_config.default_model,
+        base_url=llm_config.openai_api_base,
+        api_key=llm_config.openai_api_key
+    )
+    
+    # 填充提示词中的meal_time
+    prompt = CALORIES_MAIN_PROMPT.replace("{meal_time}", meal_time)
+    
+    messages = [
+        SystemMessage(content=prompt),
+        HumanMessage(content=f"""【食物识别报告】
+{food_report}
+
+【热量估算报告】
+{calorie_report}
+
+【运动消耗报告】
+{exercise_report}
+
+用餐时间：{meal_time}
+
+请根据以上报告生成综合分析结果。""")
+    ]
+    
+    # 初始化内容分割器
+    splitter = ContentSplitter()
+    response_content = ""
+    
+    try:
+        async for chunk in model.astream(messages, config=config):
+            chunk_content = ""
+            if chunk.content:
+                chunk_content = chunk.content
+            
+            if chunk_content:
+                response_content += chunk_content
+                # 使用ContentSplitter进行内容分流
+                events = splitter.process_chunk(chunk_content)
+                
+                for event in events:
+                    event_type = event["type"]
+                    event_content = event["content"]
+                    
+                    if event_type == "thought":
+                        await adispatch_custom_event("thought", {"content": event_content}, config=config)
+                    elif event_type == "message":
+                        await adispatch_custom_event("message", {"content": event_content}, config=config)
+        
+        # 刷新缓冲区
+        flush_events = splitter.flush()
+        for event in flush_events:
+            event_type = event["type"]
+            event_content = event["content"]
+            
+            if event_type == "thought":
+                await adispatch_custom_event("thought", {"content": event_content}, config=config)
+            elif event_type == "message":
+                await adispatch_custom_event("message", {"content": event_content}, config=config)
+                
+    except Exception as e:
+        error_msg = f"聚合分析失败: {str(e)}"
+        return {"messages": [AIMessage(content=error_msg)]}
+    
+    # 解析JSON结果并生成function_call
+    try:
+        # 尝试提取JSON
+        json_match = re.search(r'\{[\s\S]*?"food_items"[\s\S]*?\}', response_content)
+        if json_match:
+            json_str = json_match.group()
+            # 清理JSON字符串
+            json_str = re.sub(r'"reason-content"\s*:\s*"[^"]*"\s*,?', '', json_str)
+            json_str = re.sub(r'"answer"\s*:\s*"[^"]*"\s*,?', '', json_str)
+            
+            food_data = json.loads(json_str)
+            
+            # 发送function_call事件
+            await adispatch_custom_event("function_call", {
+                "content": json.dumps({
+                    "action": "calories_result",
+                    "food_items": food_data.get("food_items", []),
+                    "total_calories": food_data.get("total_calories", 0),
+                    "overall_advice": food_data.get("overall_advice", "")
+                })
+            }, config=config)
+    except Exception as e:
+        print(f"[DEBUG] JSON解析失败: {e}")
+    
+    return {"messages": [AIMessage(content=response_content)]}
+
+
+# 构建"吃多少"并发工作流图
 calories_workflow = StateGraph(AgentState)
-calories_workflow.add_node("agent", calories_node)
-calories_workflow.add_node("tools", calories_tools_node)
-calories_workflow.set_entry_point("agent")
-calories_workflow.add_conditional_edges("agent", should_continue)
-calories_workflow.add_edge("tools", END)
+
+# 添加启动节点
+async def calories_start_node(state: AgentState):
+    """启动节点：初始化工作流"""
+    return {}
+
+calories_workflow.add_node("start", calories_start_node)
+calories_workflow.add_node("food_identification", food_identification_node)
+calories_workflow.add_node("calorie_estimation", calorie_estimation_node)
+calories_workflow.add_node("exercise_estimation", exercise_estimation_node)
+calories_workflow.add_node("aggregator", calories_aggregator_node)
+
+# 设置入口点
+calories_workflow.set_entry_point("start")
+
+# 从启动节点并行执行三个分析节点
+calories_workflow.add_edge("start", "food_identification")
+calories_workflow.add_edge("start", "calorie_estimation")
+calories_workflow.add_edge("start", "exercise_estimation")
+
+# 汇聚到聚合节点
+calories_workflow.add_edge("food_identification", "aggregator")
+calories_workflow.add_edge("calorie_estimation", "aggregator")
+calories_workflow.add_edge("exercise_estimation", "aggregator")
+
+calories_workflow.add_edge("aggregator", END)
+
 calories_graph = calories_workflow.compile()
