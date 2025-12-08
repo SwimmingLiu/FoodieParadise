@@ -2,9 +2,9 @@
   <view class="container">
     <!-- Hero Section -->
     <view class="hero-section">
-      <image class="hero-bg" src="/static/首页图.png" mode="aspectFill"></image>
+      <image class="hero-bg" src="/static/new_home_bg.png" mode="aspectFill"></image>
       <view class="hero-content">
-        <text class="hero-title">美食天堂</text>
+        <text class="hero-title">好吃嘴儿天堂</text>
         <text class="hero-subtitle">发现 · 分析 · 享受</text>
       </view>
     </view>
@@ -15,9 +15,6 @@
       <view class="feature-card large" @click="navigateTo('/pages/where-to-eat/index')">
         <image class="card-bg" src="/static/去哪儿背景图.png" mode="aspectFill"></image>
         <view class="card-overlay night-glass">
-          <view class="card-icon-wrapper">
-            <image class="card-icon" src="/static/坐标.png" mode="aspectFit"></image>
-          </view>
           <text class="card-title">去哪吃</text>
           <text class="card-desc">解决你的选择困难症</text>
         </view>
@@ -28,7 +25,6 @@
         <view class="feature-card medium" @click="navigateTo('/pages/check-premade/index')">
           <image class="card-bg" src="/static/预制菜背景图.png" mode="aspectFill"></image>
           <view class="card-overlay night-glass">
-            <image class="card-icon small" src="/static/汉堡.png" mode="aspectFit"></image>
             <text class="card-title">查预制</text>
             <text class="card-desc">了解食品配料与来源</text>
           </view>
@@ -38,7 +34,6 @@
         <view class="feature-card medium" @click="navigateTo('/pages/calories/index')">
           <image class="card-bg" src="/static/体重秤.png" mode="aspectFill"></image>
           <view class="card-overlay night-glass">
-            <image class="card-icon small" src="/static/5.9kcal.png" mode="aspectFit"></image>
             <text class="card-title">吃多少</text>
             <text class="card-desc">热量估算与建议</text>
           </view>

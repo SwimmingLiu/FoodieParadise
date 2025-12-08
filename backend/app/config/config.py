@@ -27,6 +27,8 @@ class DatabaseConfig(BaseSettings):
         case_sensitive = False
         # 从 .env 文件加载配置
         env_file = ".env"
+        # 忽略额外的环境变量
+        extra = "ignore"
     
     @property
     def database_url(self) -> str:
@@ -39,6 +41,7 @@ class DatabaseConfig(BaseSettings):
             f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}"
             f"@{self.mysql_host}:{self.mysql_port}/{self.mysql_db}"
         )
+
 
 
 class QiniuConfig(BaseSettings):
@@ -60,6 +63,8 @@ class QiniuConfig(BaseSettings):
     class Config:
         case_sensitive = False
         env_file = ".env"
+        # 忽略额外的环境变量
+        extra = "ignore"
 
 
 class LLMConfig(BaseSettings):
@@ -73,13 +78,15 @@ class LLMConfig(BaseSettings):
     # API基础URL（支持自定义端点）
     openai_api_base: str
     # 默认使用的模型名称
-    default_model: str = "gemini-2.5-pro"
+    default_model: str = "o4-mini"
     # 模型温度参数（控制随机性）
     default_temperature: float = 0.0
     
     class Config:
         case_sensitive = False
         env_file = ".env"
+        # 忽略额外的环境变量
+        extra = "ignore"
 
 
 class AppConfig(BaseSettings):
@@ -102,6 +109,8 @@ class AppConfig(BaseSettings):
     class Config:
         case_sensitive = False
         env_file = ".env"
+        # 忽略额外的环境变量
+        extra = "ignore"
     
     @property
     def cors_origins_list(self) -> list:

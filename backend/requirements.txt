@@ -6,6 +6,7 @@ langgraph
 langchain-community
 httpx
 pydantic
+pydantic-settings
 langchain-openai
 qiniu
 sqlalchemy
