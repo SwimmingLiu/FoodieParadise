@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.models.history import HistoryModel
 
 def get_user_history() -> List[Dict[str, Any]]:

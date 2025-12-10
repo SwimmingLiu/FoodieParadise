@@ -81,6 +81,10 @@ class LLMConfig(BaseSettings):
     default_model: str = "o4-mini"
     # 模型温度参数（控制随机性）
     default_temperature: float = 0.0
+    # 请求超时时间（秒），用于处理网络不稳定情况
+    request_timeout: float = 120.0
+    # 最大重试次数，用于处理临时性连接错误
+    max_retries: int = 3
     
     class Config:
         case_sensitive = False

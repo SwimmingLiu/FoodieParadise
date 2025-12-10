@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, JSON, DateTime
 from sqlalchemy.sql import func
-from app.database import Base
+from app.config.database import Base
 
 class HistoryModel(Base):
     __tablename__ = "history"

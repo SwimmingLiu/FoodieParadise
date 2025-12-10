@@ -13,7 +13,7 @@ import uvicorn
 load_dotenv()
 
 from app.controllers.food_controller import router as food_router
-from app.database import engine, Base
+from app.config.database import engine, Base
 from app.config import settings
 
 # ========== 数据库初始化 ==========
