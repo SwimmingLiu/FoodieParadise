@@ -8,7 +8,7 @@
         <!-- Header with Logo and Title -->
         <view class="header-section">
           <view class="header-title-row">
-            <image src="/static/eating_quantity_icon.png" mode="aspectFit" class="header-logo"></image>
+            <image src="https://oss.swimmingliu.cn/foodie_paradise/c4099e5e-645d-4618-8e4c-1b7a6953e9ff.png" mode="aspectFit" class="header-logo"></image>
             <text class="header-title">吃多少</text>
           </view>
           <text class="header-slogan">拍张美食照，AI秒算热量消耗</text>
@@ -215,6 +215,7 @@ marked.setOptions({
 });
 
 // Tag styles for mp-html
+// hr: 美化 Markdown 分割线，使用渐变背景从两边透明渐变到中间灰色
 const mpHtmlTagStyle = {
     ol: 'padding-left: 0; margin-left: 0; list-style-position: inside; line-height: 1.8;',
     ul: 'padding-left: 0; margin-left: 0; list-style-position: inside; line-height: 1.8;',
@@ -226,6 +227,7 @@ const mpHtmlTagStyle = {
     h2: 'font-size: 16px; font-weight: 700; margin: 14px 0 10px 0; line-height: 1.6;',
     h3: 'font-size: 16px; font-weight: 700; margin: 14px 0 10px 0; line-height: 1.6;',
     h4: 'font-size: 16px; font-weight: 700; margin: 14px 0 10px 0; line-height: 1.6;',
+    hr: 'border: none; height: 1px; background: linear-gradient(to right, transparent, #e0e0e0 20%, #e0e0e0 80%, transparent); margin: 24px 0;'
 };
 
 // Banner cards for swiper

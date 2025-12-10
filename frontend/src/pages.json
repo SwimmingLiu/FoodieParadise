@@ -9,13 +9,13 @@
 		{
 			"path": "pages/where-to-eat/index",
 			"style": {
-				"navigationBarTitleText": "去哪儿吃"
+				"navigationBarTitleText": "去哪吃"
 			}
 		},
 		{
 			"path": "pages/check-premade/index",
 			"style": {
-				"navigationBarTitleText": "预制菜"
+				"navigationBarTitleText": "查预制"
 			}
 		},
 		{

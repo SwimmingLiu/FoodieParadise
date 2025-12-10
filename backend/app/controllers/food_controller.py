@@ -41,20 +41,31 @@ async def upload_file(file: UploadFile = File(...)):
     接收用户上传的文件，保存到临时目录后上传至七牛云OSS。
     上传成功后返回文件的公开访问URL。
     
+    使用UUID生成临时文件名，避免并发上传时的文件名冲突。
+    
     Args:
         file: 上传的文件对象
         
     Returns:
         dict: 包含文件URL的字典 {"file_path": "https://..."}
     """
-    temp_file_path = f"/tmp/{file.filename}"
-    with open(temp_file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # 生成安全的临时文件名
+    import uuid
+    file_ext = os.path.splitext(file.filename)[1]
+    temp_filename = f"{uuid.uuid4()}{file_ext}"
+    temp_file_path = f"/tmp/{temp_filename}"
     
     try:
-        file_url = oss_service.upload_file(temp_file_path, file.filename)
+        # 保存到本地临时文件
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # 上传到OSS
+        # 不传入原来的文件名，让oss_service自动生成UUID文件名，避免OSS上的文件覆盖冲突
+        file_url = oss_service.upload_file(temp_file_path)
         return {"file_path": file_url}
     finally:
+        # 清理临时文件
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 

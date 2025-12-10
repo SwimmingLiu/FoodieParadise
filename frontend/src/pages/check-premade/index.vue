@@ -19,10 +19,6 @@
           <swiper-item v-for="(item, index) in bannerCards" :key="index" @click="selectBannerCard(item)">
             <view :class="['card-item', currentBannerIndex === index ? 'card-active' : '']">
               <image :src="item.image" mode="aspectFill" class="card-image"></image>
-              <view class="card-overlay">
-                <text class="card-category">{{ item.title }}</text>
-                <text class="card-question">{{ item.desc }}</text>
-              </view>
             </view>
           </swiper-item>
         </swiper>
@@ -83,8 +79,45 @@
             </view>
         </view>
 
-        <!-- Text Report (Markdown) -->
-        <view class="report-card">
+        <!-- Report Cards - Split into 3 sections -->
+        <!-- 如果有拆分的报告部分，显示三个卡片 -->
+        <template v-if="hasReportSections">
+            <!-- 鉴定结论卡片 -->
+            <view v-if="reportSections.conclusion" class="section-card conclusion-card">
+                <view class="section-title-row">
+                    <text class="section-icon">🧐</text>
+                    <text class="section-title">鉴定结论</text>
+                </view>
+                <view class="section-content">
+                    <mp-html :content="parseMarkdown(reportSections.conclusion)" :tag-style="mpHtmlTagStyle" />
+                </view>
+            </view>
+            
+            <!-- 深度拆解卡片 -->
+            <view v-if="reportSections.breakdown" class="section-card breakdown-card">
+                <view class="section-title-row">
+                    <text class="section-icon">🥩</text>
+                    <text class="section-title">深度拆解</text>
+                </view>
+                <view class="section-content">
+                    <mp-html :content="parseMarkdown(reportSections.breakdown)" :tag-style="mpHtmlTagStyle" />
+                </view>
+            </view>
+            
+            <!-- 综合评价卡片 -->
+            <view v-if="reportSections.evaluation" class="section-card evaluation-card">
+                <view class="section-title-row">
+                    <text class="section-icon">📝</text>
+                    <text class="section-title">综合评价</text>
+                </view>
+                <view class="section-content">
+                    <mp-html :content="parseMarkdown(reportSections.evaluation)" :tag-style="mpHtmlTagStyle" />
+                </view>
+            </view>
+        </template>
+        
+        <!-- 如果没有拆分的报告部分，显示原始报告卡片 -->
+        <view v-else-if="cleanReportText" class="report-card">
             <view class="report-title-row">
                 <text class="report-icon">📋</text>
                 <text class="report-title">详细分析报告</text>
@@ -92,12 +125,12 @@
             <view class="markdown-content">
                 <mp-html :content="parseMarkdown(cleanReportText)" :tag-style="mpHtmlTagStyle" />
             </view>
-            
-            <!-- Loading Indicator -->
-            <view v-if="analyzing" class="analyzing-indicator">
-                <view class="dot-flashing"></view>
-                <text>正在通过视觉特征分析...</text>
-            </view>
+        </view>
+        
+        <!-- Loading Indicator -->
+        <view v-if="analyzing" class="analyzing-indicator-card">
+            <view class="dot-flashing"></view>
+            <text>正在通过视觉特征分析...</text>
         </view>
         
         <view style="height: 100rpx;"></view>
@@ -115,15 +148,18 @@ import { marked } from 'marked';
 marked.setOptions({ breaks: true, gfm: true });
 
 // Styles for mp-html
+// hr: 美化 Markdown 分割线，使用渐变背景从两边透明渐变到中间灰色
 const mpHtmlTagStyle = {
-    p: 'margin: 10px 0; line-height: 1.8; color: #333; text-align: justify;',
+    p: 'margin: 10px 0; line-height: 1.8; color: #333; text-align: justify; display: inline;',
     h1: 'font-size: 18px; font-weight: bold; margin: 20px 0 10px 0;',
     h2: 'font-size: 16px; font-weight: bold; margin: 16px 0 10px 0; color: #333; border-left: 4px solid #ff9800; padding-left: 10px;',
     h3: 'font-size: 15px; font-weight: bold; margin: 14px 0 8px 0; color: #333;',
-    ul: 'margin: 0; padding: 0; list-style-position: inside;',
-    ol: 'margin: 0; padding: 0; list-style-position: inside;',
-    li: 'margin: 5px 0; padding: 0; color: #555; line-height: 1.8; text-indent: 0;',
-    strong: 'color: #000; font-weight: 700;'
+    ul: 'margin: 0; padding: 0; padding-left: 0; margin-left: 0; list-style-position: inside; line-height: 1.8;',
+    ol: 'margin: 0; padding: 0; padding-left: 0; margin-left: 0; list-style-position: inside; line-height: 1.8;',
+    li: 'margin: 5px 0; padding: 0; padding-left: 0; margin-left: 0; color: #555; line-height: 1.8; text-indent: 0; display: list-item;',
+    strong: 'color: #000; font-weight: 700; display: inline;',
+    em: 'display: inline;',
+    hr: 'border: none; height: 1px; background: linear-gradient(to right, transparent, #e0e0e0 20%, #e0e0e0 80%, transparent); margin: 24px 0;'
 };
 
 // State
@@ -148,6 +184,67 @@ const scrollIntoView = ref('');
 const cleanReportText = computed(() => {
     // Remove JSON block from display text if it exists
     return result.value.replace(/```json[\s\S]*?```/g, '').trim();
+});
+
+/**
+ * 解析报告内容为三个部分：鉴定结论、深度拆解、综合评价
+ * 根据标题关键词拆分 Markdown 内容
+ */
+const reportSections = computed(() => {
+    const text = cleanReportText.value;
+    if (!text) return { conclusion: '', breakdown: '', evaluation: '' };
+    
+    // 定义各部分的标题关键词（支持多种格式）
+    const conclusionPatterns = ['🧐 鉴定结论', '🧐鉴定结论', '## 鉴定结论', '# 鉴定结论'];
+    const breakdownPatterns = ['🥩 深度拆解', '🥩深度拆解', '## 深度拆解', '# 深度拆解'];
+    const evaluationPatterns = ['📝 综合评价', '📝综合评价', '## 综合评价', '# 综合评价'];
+    
+    // 查找各部分的起始位置
+    const findPosition = (patterns) => {
+        for (const pattern of patterns) {
+            const idx = text.indexOf(pattern);
+            if (idx !== -1) return { index: idx, pattern };
+        }
+        return { index: -1, pattern: '' };
+    };
+    
+    const conclusionPos = findPosition(conclusionPatterns);
+    const breakdownPos = findPosition(breakdownPatterns);
+    const evaluationPos = findPosition(evaluationPatterns);
+    
+    // 提取各部分内容
+    let conclusion = '';
+    let breakdown = '';
+    let evaluation = '';
+    
+    // 按位置排序并提取
+    const positions = [
+        { name: 'conclusion', ...conclusionPos },
+        { name: 'breakdown', ...breakdownPos },
+        { name: 'evaluation', ...evaluationPos }
+    ].filter(p => p.index !== -1).sort((a, b) => a.index - b.index);
+    
+    for (let i = 0; i < positions.length; i++) {
+        const current = positions[i];
+        const next = positions[i + 1];
+        const startIdx = current.index + current.pattern.length;
+        const endIdx = next ? next.index : text.length;
+        const content = text.substring(startIdx, endIdx).trim();
+        
+        if (current.name === 'conclusion') conclusion = content;
+        else if (current.name === 'breakdown') breakdown = content;
+        else if (current.name === 'evaluation') evaluation = content;
+    }
+    
+    return { conclusion, breakdown, evaluation };
+});
+
+/**
+ * 检查是否有任何报告部分内容
+ */
+const hasReportSections = computed(() => {
+    const sections = reportSections.value;
+    return sections.conclusion || sections.breakdown || sections.evaluation;
 });
 
 // Methods
@@ -251,6 +348,22 @@ const startStreamAnalysis = (remotePath) => {
             extractStructuredData(result.value);
             // Auto collapse thoughts on completion
             showThoughts.value = false;
+            
+            // 输出完整的 LLM 返回内容到控制台
+            console.log('\n========== 查预制页面 - LLM 完整返回内容 ==========');
+            console.log('\n--- 思考过程 (Thoughts) ---');
+            console.log(thoughts.value.join(''));
+            console.log('\n--- 结果内容 (Result) ---');
+            console.log(result.value);
+            console.log('\n--- 清理后的报告文本 (Clean Report) ---');
+            console.log(cleanReportText.value);
+            console.log('\n--- 拆分后的三个部分 (Report Sections) ---');
+            console.log('鉴定结论:', reportSections.value.conclusion);
+            console.log('深度拆解:', reportSections.value.breakdown);
+            console.log('综合评价:', reportSections.value.evaluation);
+            console.log('\n--- 结构化数据 (Structured Result) ---');
+            console.log(JSON.stringify(structuredResult.value, null, 2));
+            console.log('='.repeat(50) + '\n');
         },
         onError: (err) => {
             console.error(err);
@@ -296,7 +409,17 @@ const decodeHTMLEntities = (text) => {
 };
 
 const parseMarkdown = (content) => {
-    try { return marked.parse(content || ''); } catch { return content; }
+    if (!content) return '';
+    try {
+        // 先解码 HTML 实体，再解析 markdown
+        const decoded = decodeHTMLEntities(content);
+        // 将字面 \n 字符串替换为实际换行符
+        const withNewlines = decoded.replace(/\\n/g, '\n');
+        return marked.parse(withNewlines);
+    } catch (e) {
+        console.error('Markdown parse error:', e);
+        return content;
+    }
 };
 </script>
 
@@ -351,21 +474,19 @@ const parseMarkdown = (content) => {
 .card-swiper {
     width: 100%;
     height: 800rpx;
-    margin-top: 30rpx;
+    margin-top: 60rpx;
 }
 .card-item {
-    height: 100%;
-    margin: 0 20rpx;
+    width: 100%;
+    height: 720rpx;
     border-radius: 32rpx;
     overflow: hidden;
     position: relative;
-    transform: scale(0.92);
-    transition: all 0.3s ease;
-    box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.1);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
 }
 .card-active {
     transform: scale(1);
-    box-shadow: 0 20rpx 50rpx rgba(0,0,0,0.2);
 }
 .card-image {
     width: 100%;
@@ -610,6 +731,89 @@ const parseMarkdown = (content) => {
     font-weight: 700;
     color: #333;
 }
+
+/* Section Cards - 三个报告卡片的通用样式 */
+.section-card {
+    background: #fff;
+    border-radius: 24rpx;
+    padding: 32rpx;
+    margin-bottom: 24rpx;
+    box-shadow: 0 8rpx 32rpx rgba(0,0,0,0.06);
+    border: 1px solid rgba(0,0,0,0.02);
+    position: relative;
+    overflow: hidden;
+}
+
+.section-title-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24rpx;
+    padding-bottom: 16rpx;
+    border-bottom: 2rpx solid #f5f5f5;
+}
+
+.section-icon {
+    font-size: 40rpx;
+    margin-right: 16rpx;
+}
+
+.section-title {
+    font-size: 32rpx;
+    font-weight: 700;
+    color: #333;
+}
+
+.section-content {
+    line-height: 1.8;
+}
+
+/* 鉴定结论卡片 - 绿色主题 */
+.conclusion-card {
+    border-left: 6rpx solid #4caf50;
+}
+.conclusion-card .section-title-row {
+    border-bottom-color: rgba(76, 175, 80, 0.2);
+}
+.conclusion-card .section-title {
+    color: #2e7d32;
+}
+
+/* 深度拆解卡片 - 橙色主题 */
+.breakdown-card {
+    border-left: 6rpx solid #ff9800;
+}
+.breakdown-card .section-title-row {
+    border-bottom-color: rgba(255, 152, 0, 0.2);
+}
+.breakdown-card .section-title {
+    color: #e65100;
+}
+
+/* 综合评价卡片 - 蓝色主题 */
+.evaluation-card {
+    border-left: 6rpx solid #2196f3;
+}
+.evaluation-card .section-title-row {
+    border-bottom-color: rgba(33, 150, 243, 0.2);
+}
+.evaluation-card .section-title {
+    color: #1565c0;
+}
+
+/* Loading Indicator Card */
+.analyzing-indicator-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40rpx;
+    background: #fff;
+    border-radius: 24rpx;
+    margin-bottom: 24rpx;
+    box-shadow: 0 8rpx 32rpx rgba(0,0,0,0.06);
+    color: #999;
+    font-size: 26rpx;
+}
+
 .analyzing-indicator {
     display: flex;
     align-items: center;

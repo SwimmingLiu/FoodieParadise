@@ -232,6 +232,7 @@ marked.setOptions({
 
 // Tag styles for mp-html to override default list indentation
 // Ensures all content aligns to the left edge with improved line spacing
+// hr: 美化 Markdown 分割线，使用渐变背景从两边透明渐变到中间灰色
 const mpHtmlTagStyle = {
     ol: 'padding-left: 0; margin-left: 0; list-style-position: inside; line-height: 1.8;',
     ul: 'padding-left: 0; margin-left: 0; list-style-position: inside; line-height: 1.8;',
@@ -243,6 +244,7 @@ const mpHtmlTagStyle = {
     h2: 'font-size: 16px; font-weight: 700; margin: 14px 0 10px 0; line-height: 1.6;',
     h3: 'font-size: 16px; font-weight: 700; margin: 14px 0 10px 0; line-height: 1.6;',
     h4: 'font-size: 16px; font-weight: 700; margin: 14px 0 10px 0; line-height: 1.6;',
+    hr: 'border: none; height: 1px; background: linear-gradient(to right, transparent, #e0e0e0 20%, #e0e0e0 80%, transparent); margin: 24px 0;'
 };
 
 // State
@@ -1685,9 +1687,10 @@ onShareTimeline(() => {
     background-color: #fff;
     border-radius: 32rpx 32rpx 0 0;
     padding: 32rpx 32rpx;
-    padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+    padding-bottom: calc(60rpx + env(safe-area-inset-bottom));
     position: relative;
     overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .modal-close {
@@ -1775,17 +1778,18 @@ onShareTimeline(() => {
 }
 
 .modal-input-area {
-    margin-bottom: 20rpx;
+    margin-bottom: 28rpx;
 }
 
 .modal-input {
     width: 100%;
-    height: 80rpx;
+    height: 88rpx;
     background-color: #f5f5f5;
-    border-radius: 40rpx;
+    border-radius: 44rpx;
     padding: 0 32rpx;
     font-size: 28rpx;
     border: 1px solid #e8e8e8;
+    box-sizing: border-box;
 }
 
 .modal-submit-btn {

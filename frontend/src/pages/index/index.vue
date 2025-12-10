@@ -36,13 +36,13 @@
           <view class="card-icon-wrapper">
             <image 
               class="card-icon" 
-              src="/static/images/where_to_eat.png" 
+              src="https://oss.swimmingliu.cn/foodie_paradise/c050311f-f1f0-463a-8c4d-3a84ceb8a57a.png" 
               mode="aspectFit"
             ></image>
           </view>
           <!-- 底部描述 -->
           <view class="card-bottom">
-            <text class="card-desc">解决选择困难症</text>
+            <text class="card-desc">看看他们在哪儿吃？</text>
           </view>
         </view>
       </swiper-item>
@@ -62,7 +62,7 @@
           <view class="card-icon-wrapper">
             <image 
               class="card-icon" 
-              src="/static/images/check_premade.png" 
+              src="https://oss.swimmingliu.cn/foodie_paradise/a58b234f-ccdf-4041-b146-724e519a4f2f.png" 
               mode="aspectFit"
             ></image>
           </view>
@@ -88,7 +88,7 @@
           <view class="card-icon-wrapper">
             <image 
               class="card-icon" 
-              src="/static/images/calories.png" 
+              src="https://oss.swimmingliu.cn/foodie_paradise/84fb877f-7b8c-476e-bf4a-d0a1a8971414.png" 
               mode="aspectFit"
             ></image>
           </view>
@@ -182,7 +182,7 @@ const navigateTo = (url) => {
    ============================================ */
 .header-section {
   padding: 20rpx 40rpx;
-  padding-top: 100rpx; /* 稍微下移，增加留白 */
+  padding-top: 50rpx; /* 顶部留白 */
   text-align: center;
   position: relative;
   z-index: 10;

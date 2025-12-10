@@ -68,32 +68,8 @@ async def where_to_eat_node(state: AgentState, config: RunnableConfig):
         async for chunk in model.astream(messages, config=config):
             chunk_content = ""
             
-            # ===== 优先级1: 处理推理内容（专用字段） =====
-            if hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs:
-                reasoning = chunk.additional_kwargs.get("reasoning_content", "")
-                if reasoning:
-                    await adispatch_custom_event("thought", {"content": reasoning}, config=config)
-                    thought_content += reasoning
-                    continue
-            
-            # ===== 优先级2: 处理 content_blocks =====
-            has_content_blocks = False
-            if hasattr(chunk, "content_blocks") and chunk.content_blocks:
-                has_content_blocks = True
-                for block in chunk.content_blocks:
-                    block_type = block.get("type", "")
-                    if block_type == "reasoning":
-                        reasoning_text = block.get("reasoning", "")
-                        if reasoning_text:
-                            await adispatch_custom_event("thought", {"content": reasoning_text}, config=config)
-                            thought_content += reasoning_text
-                    elif block_type == "text":
-                        text_content = block.get("text", "")
-                        if text_content:
-                            chunk_content += text_content
-            
-            # ===== 优先级3: 处理普通 content 字段 =====
-            if not has_content_blocks and chunk.content:
+            # 优先获取 content 内容
+            if hasattr(chunk, "content") and chunk.content:
                 chunk_content = chunk.content
             
             # ===== 使用ContentSplitter进行内容分流 =====
@@ -108,7 +84,10 @@ async def where_to_eat_node(state: AgentState, config: RunnableConfig):
                     if event_type == "thought":
                         await adispatch_custom_event("thought", {"content": event_content}, config=config)
                     elif event_type == "message":
-                        clean_content = _clean_json_markers(event_content)
+                        # 尝试清理可能出现的JSON块（注意：流式过程中可能清理不完全，在最终结果中会再次清理）
+                        # 实际上流式输出时难以完美去除尚未结束的JSON块，暂时直接输出，前端不展示或由最终结果覆盖
+                        # 这里还是做简单的JSON块标记清理
+                        clean_content = _clean_message_content(event_content)
                         if clean_content.strip():
                             await adispatch_custom_event("message", {"content": clean_content}, config=config)
         
@@ -121,7 +100,7 @@ async def where_to_eat_node(state: AgentState, config: RunnableConfig):
             if event_type == "thought":
                 await adispatch_custom_event("thought", {"content": event_content}, config=config)
             elif event_type == "message":
-                clean_content = _clean_json_markers(event_content)
+                clean_content = _clean_message_content(event_content)
                 if clean_content.strip():
                     await adispatch_custom_event("message", {"content": clean_content}, config=config)
 
@@ -146,6 +125,7 @@ async def where_to_eat_node(state: AgentState, config: RunnableConfig):
     print(f"{'='*60}\n")
     
     # ========== 步骤6: 提取位置JSON信息 ==========
+    # 从完整响应中提取 JSON
     json_pattern = r'```json\s*(\{[^`]*?\})\s*```'
     json_matches = re.findall(json_pattern, response_content, re.DOTALL)
     
@@ -162,7 +142,9 @@ async def where_to_eat_node(state: AgentState, config: RunnableConfig):
     final_messages = []
     
     # 合并思考过程
-    combined_thought = thought_content + parsed.thought
+    # 注意：refactor 后 thought_content 主要由 splitter 收集，前面的 thought_content 变量可能不再使用
+    # 但为了兼容，如果 splitter.thought 有内容就用 splitter 的
+    combined_thought = parsed.thought
     if combined_thought:
         final_messages.append(AIMessage(
             content=combined_thought,
@@ -171,7 +153,8 @@ async def where_to_eat_node(state: AgentState, config: RunnableConfig):
 
     # 使用解析的answer作为最终结果
     result_content = parsed.answer if parsed.answer else response_content
-    result_content = _clean_json_markers(result_content)
+    # 清理掉 JSON 块，只保留对用户友好的文本
+    result_content = _clean_message_content(result_content)
     result_content = result_content.strip()
     
     if result_content:
@@ -196,19 +179,23 @@ async def where_to_eat_node(state: AgentState, config: RunnableConfig):
                 }
             ))
     else:
-        final_messages.append(AIMessage(
-            content="未能从响应中提取位置信息。",
-            additional_kwargs={"message": "未能从响应中提取位置信息。"}
-        ))
+        # 如果解析到了 locations 但 parsed.answer 为空？或者没有locations？
+        pass # 保持原逻辑，这里原逻辑是 else append 未能提取信息，但通常会有文本回复
+        
+        # 只有在真的没有任何有效回复时才报错，但通常 parsed.answer 会有内容
+        if not result_content and not locations:
+             final_messages.append(AIMessage(
+                content="未能从响应中提取位置信息。",
+                additional_kwargs={"message": "未能从响应中提取位置信息。"}
+            ))
         
     yield {"messages": final_messages}
 
 
-def _clean_json_markers(content: str) -> str:
-    """清理内容中的JSON残留标记"""
-    clean_content = re.sub(r'```json\s*\{[^`]*?\}\s*```', '', content)
-    clean_content = re.sub(r'\s*"\s*\}\s*$', '', clean_content)
-    clean_content = re.sub(r'^\s*"\s*\}\s*', '', clean_content)
+def _clean_message_content(content: str) -> str:
+    """清理内容中的JSON代码块（仅用于显示给用户的文本）"""
+    # 移除 ```json ... ``` 代码块
+    clean_content = re.sub(r'```json\s*\{[^`]*?\}\s*```', '', content, flags=re.DOTALL)
     return clean_content
 
 
