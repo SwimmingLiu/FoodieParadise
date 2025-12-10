@@ -128,6 +128,9 @@ class AppConfig(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",")]
 
 
+from app.config.logging import LoggingConfig
+
+
 class Settings:
     """统一配置管理类
     
@@ -140,6 +143,7 @@ class Settings:
         self.qiniu = QiniuConfig()
         self.llm = LLMConfig()
         self.app = AppConfig()
+        self.logging = LoggingConfig()
 
 
 # 创建全局配置实例

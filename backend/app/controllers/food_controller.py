@@ -14,16 +14,11 @@ from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import StreamingResponse
 import shutil
 import os
-import logging
-import sys
 
-# ========== 日志配置 ==========
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
-logger = logging.getLogger(__name__)
+# ========== 导入配置和日志 ==========
+from app.config import get_logger
+
+logger = get_logger(__name__)
 
 # ========== 导入业务模块 ==========
 from app.models.schemas import ChatRequest, CaloriesRequest, HistoryRecord
