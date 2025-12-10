@@ -1,49 +1,117 @@
 <template>
   <view class="container">
-    <!-- Hero Section -->
-    <view class="hero-section">
-      <image class="hero-bg" src="/static/new_home_bg.png" mode="aspectFill"></image>
-      <view class="hero-content">
-        <text class="hero-title">好吃嘴儿天堂</text>
-        <text class="hero-subtitle">发现 · 分析 · 享受</text>
-      </view>
+    <!-- 背景艺术字装饰 -->
+    <text class="bg-art-text">Foodie</text>
+    <text class="bg-art-text-2">Paradise</text>
+
+    <!-- 顶部标题区域 -->
+    <view class="header-section">
+      <text class="main-title">好吃嘴儿天堂</text>
+      <text class="sub-title">发现 · 分析 · 享受</text>
     </view>
 
-    <!-- Main Features Grid -->
-    <view class="feature-grid">
-      <!-- Where to Eat -->
-      <view class="feature-card large" @click="navigateTo('/pages/where-to-eat/index')">
-        <image class="card-bg" src="/static/去哪儿背景图.png" mode="aspectFill"></image>
-        <view class="card-overlay night-glass">
-          <text class="card-title">去哪吃</text>
-          <text class="card-desc">解决你的选择困难症</text>
+    <!-- 卡片层叠区域 - 3D 效果 -->
+    <swiper
+      class="card-swiper"
+      :current="currentIndex"
+      :previous-margin="'120rpx'"
+      :next-margin="'120rpx'"
+      :circular="true"
+      :autoplay="false"
+      :duration="500"
+      @change="onSwiperChange"
+    >
+      <!-- 去哪吃卡片 -->
+      <swiper-item class="swiper-item">
+        <view 
+          class="elli-card"
+          :class="{ 'active-card': currentIndex === 0 }"
+          @click="navigateTo('/pages/where-to-eat/index')"
+        >
+          <!-- 顶部标题 -->
+          <view class="card-top">
+            <text class="card-title">去哪吃</text>
+          </view>
+          <!-- 中间图标区域 -->
+          <view class="card-icon-wrapper">
+            <image 
+              class="card-icon" 
+              src="/static/images/where_to_eat.png" 
+              mode="aspectFit"
+            ></image>
+          </view>
+          <!-- 底部描述 -->
+          <view class="card-bottom">
+            <text class="card-desc">解决选择困难症</text>
+          </view>
         </view>
-      </view>
+      </swiper-item>
 
-      <view class="row">
-        <!-- Check Pre-made -->
-        <view class="feature-card medium" @click="navigateTo('/pages/check-premade/index')">
-          <image class="card-bg" src="/static/预制菜背景图.png" mode="aspectFill"></image>
-          <view class="card-overlay night-glass">
+      <!-- 查预制卡片 -->
+      <swiper-item class="swiper-item">
+        <view 
+          class="elli-card"
+          :class="{ 'active-card': currentIndex === 1 }"
+          @click="navigateTo('/pages/check-premade/index')"
+        >
+          <!-- 顶部标题 -->
+          <view class="card-top">
             <text class="card-title">查预制</text>
-            <text class="card-desc">了解食品配料与来源</text>
+          </view>
+          <!-- 中间图标区域 -->
+          <view class="card-icon-wrapper">
+            <image 
+              class="card-icon" 
+              src="/static/images/check_premade.png" 
+              mode="aspectFit"
+            ></image>
+          </view>
+          <!-- 底部描述 -->
+          <view class="card-bottom">
+            <text class="card-desc">辨别预制菜品</text>
           </view>
         </view>
+      </swiper-item>
 
-        <!-- How Much to Eat -->
-        <view class="feature-card medium" @click="navigateTo('/pages/calories/index')">
-          <image class="card-bg" src="/static/体重秤.png" mode="aspectFill"></image>
-          <view class="card-overlay night-glass">
+      <!-- 吃多少卡片 -->
+      <swiper-item class="swiper-item">
+        <view 
+          class="elli-card"
+          :class="{ 'active-card': currentIndex === 2 }"
+          @click="navigateTo('/pages/calories/index')"
+        >
+          <!-- 顶部标题 -->
+          <view class="card-top">
             <text class="card-title">吃多少</text>
-            <text class="card-desc">热量估算与建议</text>
+          </view>
+          <!-- 中间图标区域 -->
+          <view class="card-icon-wrapper">
+            <image 
+              class="card-icon" 
+              src="/static/images/calories.png" 
+              mode="aspectFit"
+            ></image>
+          </view>
+          <!-- 底部描述 -->
+          <view class="card-bottom">
+            <text class="card-desc">科学管理饮食</text>
           </view>
         </view>
-      </view>
-    </view>
+      </swiper-item>
+    </swiper>
+
   </view>
 </template>
 
 <script setup>
+import { ref } from 'vue';
+
+const currentIndex = ref(0);
+
+const onSwiperChange = (e) => {
+  currentIndex.value = e.detail.current;
+};
+
 const navigateTo = (url) => {
   uni.navigateTo({
     url: url
@@ -52,153 +120,218 @@ const navigateTo = (url) => {
 </script>
 
 <style>
+/* ============================================
+   页面容器 - 紫蓝渐变背景
+   ============================================ */
 .container {
   min-height: 100vh;
-  background-color: #f8f9fa;
-  padding-bottom: 50rpx;
-}
-
-/* Hero Section */
-.hero-section {
+  height: 100vh;
+  background: linear-gradient(
+    180deg,
+    #8DA0E8 0%,
+    #9BB0F0 40%,
+    #AEC0F8 100%
+  );
   position: relative;
-  width: 100%;
-  height: 480rpx; /* Increased height to match design */
-  border-bottom-left-radius: 40rpx;
-  border-bottom-right-radius: 40rpx;
   overflow: hidden;
-  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.1);
-}
-.hero-bg {
-  width: 100%;
-  height: 100%;
-}
-.hero-content {
-  position: absolute;
-  bottom: 80rpx;
-  left: 40rpx;
-  color: #fff;
-  text-shadow: 0 2rpx 10rpx rgba(0,0,0,0.5);
-}
-.hero-title {
-  font-size: 60rpx;
-  font-weight: 800;
-  display: block;
-  margin-bottom: 10rpx;
-}
-.hero-subtitle {
-  font-size: 30rpx;
-  opacity: 0.95;
-  font-weight: 500;
-}
-
-/* Feature Grid */
-.feature-grid {
-  padding: 40rpx;
-  margin-top: -60rpx; /* Overlap with hero */
-  position: relative;
-  z-index: 10;
-}
-
-.feature-card {
-  position: relative;
-  border-radius: 30rpx;
-  overflow: hidden;
-  box-shadow: 0 8rpx 25rpx rgba(0,0,0,0.08);
-  transition: transform 0.2s;
-  background-color: #fff;
-}
-.feature-card:active {
-  transform: scale(0.98);
-}
-
-.large {
-  width: 100%;
-  height: 340rpx;
-  margin-bottom: 30rpx;
-}
-
-.row {
-  display: flex;
-  justify-content: space-between;
-}
-
-.medium {
-  width: 48%;
-  height: 380rpx;
-}
-
-.card-bg {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-/* Night Glassmorphism Style */
-.card-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  padding-bottom: env(safe-area-inset-bottom);
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 30rpx;
-  box-sizing: border-box;
+  justify-content: flex-start;
 }
 
-.night-glass {
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0) 0%,
-    rgba(0, 0, 0, 0.2) 50%,
-    rgba(0, 0, 0, 0.7) 100%
-  );
-  backdrop-filter: blur(2px); /* Subtle blur */
-}
-
-.card-icon-wrapper {
+/* ============================================
+   背景艺术字 - "Foodie Paradise" 
+   ============================================ */
+.bg-art-text {
   position: absolute;
-  top: 30rpx;
-  right: 30rpx;
-  width: 80rpx;
-  height: 80rpx;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 50%;
+  bottom: 200rpx;
+  right: 120rpx;
+  left: auto;
+  font-size: 100rpx;
+  font-weight: 900;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.15);
+  letter-spacing: -4rpx;
+  font-family: 'Georgia', serif;
+  transform: rotate(-5deg);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 0;
+}
+
+.bg-art-text-2 {
+  position: absolute;
+  bottom: 110rpx;
+  right: 60rpx;
+  left: auto;
+  font-size: 110rpx;
+  font-weight: 900;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.12);
+  letter-spacing: -4rpx;
+  font-family: 'Georgia', serif;
+  transform: rotate(-5deg);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 0;
+}
+
+/* ============================================
+   顶部标题区域
+   ============================================ */
+.header-section {
+  padding: 20rpx 40rpx;
+  padding-top: 100rpx; /* 稍微下移，增加留白 */
+  text-align: center;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.main-title {
+  font-size: 60rpx;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 4rpx;
+  display: block;
+  margin-bottom: 10rpx;
+  text-shadow: 0 4rpx 12rpx rgba(0,0,0,0.1);
+}
+
+.sub-title {
+  font-size: 30rpx;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+  letter-spacing: 8rpx;
+  text-transform: uppercase;
+}
+
+/* ============================================
+   Swiper 卡片区域
+   解决卡片显示不全问题：大幅增加高度，确保放大后的卡片和阴影不被裁剪
+   ============================================ */
+.card-swiper {
+  width: 100%;
+  height: 1000rpx; /* 增加到 1000rpx，给 1.15 倍放大 + 阴影留足空间 */
+  margin-top: auto;
+  margin-bottom: auto;
+  box-sizing: border-box;
+  z-index: 20;
+}
+
+/* 底部占位调整 */
+.container::after {
+  content: "";
+  display: block;
+  height: 200rpx; 
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.swiper-item {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: visible; 
+  padding: 40rpx 0; /* 给上下增加内边距 */
 }
 
-.card-icon {
-  width: 50rpx;
-  height: 50rpx;
+/* ============================================
+   3D 卡片 - 柔和高级感
+   去除突兀的厚块阴影，使用多层柔和阴影模拟体积感
+   ============================================ */
+.elli-card {
+  width: 480rpx;
+  height: 680rpx;
+  background: linear-gradient(165deg, #FFFFFF 0%, #F6F8FB 100%);
+  border-radius: 60rpx;
+  padding: 60rpx 40rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  
+  /* 
+     优化后的阴影组合:
+     1. 环境光 (soft ambient)
+     2. 底部投影 (drop shadow)
+     3. 内部高光 (inset highlight) 增加精致感
+  */
+  box-shadow: 
+    0 20rpx 50rpx rgba(28, 32, 66, 0.15),
+    0 5rpx 15rpx rgba(0, 0, 0, 0.05),
+    inset 0 0 0 2rpx rgba(255, 255, 255, 0.8),
+    inset 0 4rpx 10rpx rgba(255, 255, 255, 1);
+
+  transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: scale(0.92);
+  opacity: 0.85; /* 非激活态稍微不那么透明，避免看起来太远 */
 }
 
-.card-icon.small {
-  width: 80rpx;
-  height: 80rpx;
-  margin-bottom: auto; /* Push to top */
-  align-self: center;
-  /* Add a subtle glow or background for icons on complex backgrounds if needed */
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+/* 激活状态 */
+.elli-card.active-card {
+  opacity: 1;
+  z-index: 100;
+  
+  /* 放大 */
+  transform: scale(1.15); 
+  
+  /* 激活时增强投影和光泽 */
+  background: linear-gradient(165deg, #FFFFFF 0%, #FFFFFF 100%);
+  box-shadow: 
+    0 40rpx 90rpx rgba(28, 32, 66, 0.25), /* 更深远的投影 */
+    0 10rpx 30rpx rgba(28, 32, 66, 0.1),
+    inset 0 0 0 2rpx rgba(255, 255, 255, 1),
+    inset 0 4rpx 20rpx rgba(255, 255, 255, 1);
+}
+
+/* 按下效果 */
+.elli-card:active {
+  transform: scale(1.12);
+}
+
+.card-top {
+  margin-bottom: 30rpx;
+  width: 100%;
 }
 
 .card-title {
-  color: #fff;
-  font-size: 38rpx;
-  font-weight: bold;
-  margin-bottom: 10rpx;
-  text-shadow: 0 2rpx 4rpx rgba(0,0,0,0.5);
+  font-size: 52rpx;
+  font-weight: 800;
+  color: #2D3142;
+  letter-spacing: 2rpx;
+}
+
+.card-icon-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 10rpx 0;
+}
+
+.card-icon {
+  width: 360rpx;
+  height: 360rpx;
+  /* 优化图标投影，使其浮在卡片之上 */
+  filter: drop-shadow(0 20rpx 30rpx rgba(0,0,0,0.12));
+  transition: transform 0.6s ease;
+}
+
+.active-card .card-icon {
+  transform: scale(1.05) translateY(-5rpx);
+}
+
+.card-bottom {
+  margin-top: auto;
 }
 
 .card-desc {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 26rpx;
-  text-shadow: 0 1rpx 3rpx rgba(0,0,0,0.5);
+  font-size: 28rpx;
+  color: #9093A8;
+  font-weight: 600;
 }
 </style>

@@ -2,7 +2,7 @@
   <view class="container">
     <!-- User Profile -->
     <view class="profile-section">
-      <image class="avatar" src="/static/logo.png" mode="aspectFill"></image>
+      <image class="avatar" src="https://oss.swimmingliu.cn/foodie_paradise/142ddbe7-cee4-4420-975e-93a67c31e33e.png" mode="aspectFill"></image>
       <view class="info">
         <text class="nickname">美食家</text>
         <text class="uid">ID: 888888</text>

@@ -12,7 +12,7 @@
         <!-- Header with Logo and Title -->
         <view class="header-section">
           <view class="header-title-row">
-            <image src="/static/where_to_eat_logo.png" mode="aspectFit" class="header-logo"></image>
+            <image src="https://oss.swimmingliu.cn/foodie_paradise/878b89c5-2835-4308-a2ee-e928f31a0026.png" mode="aspectFit" class="header-logo"></image>
             <text class="header-title">去哪吃</text>
           </view>
           <text class="header-slogan">拍张美食照，AI秒定位附近同款</text>
@@ -34,7 +34,7 @@
         <!-- Upload Button -->
         <view class="upload-section">
           <view class="upload-main-btn" @click="chooseImage">
-            <image src="/static/upload_photo_icon.svg" mode="aspectFit" class="upload-icon"></image>
+            <image src="https://oss.swimmingliu.cn/foodie_paradise/f65002d6-d3cc-43ff-b5f6-2d637cf06672.svg" mode="aspectFit" class="upload-icon"></image>
             <text class="upload-text">上传图片</text>
           </view>
           <text class="upload-hint">一键识别，发现身边的美味</text>
@@ -248,27 +248,27 @@ const mpHtmlTagStyle = {
 // State
 const bannerCards = ref([
     {
-        image: '/static/轮播图-1.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/8c0e4d50-ffbe-4659-8c3b-6f485355ef53.jpg',
         category: '餐厅推荐',
         question: '这家餐厅在哪儿？'
     },
     {
-        image: '/static/轮播图-2.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/9cdfa36a-5463-4178-bb74-a70a6027a646.jpg',
         category: '美食探店',
         question: '北京有没有类似的店？'
     },
     {
-        image: '/static/轮播图-3.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/d6443171-7424-4a11-b523-5d30051e4185.jpg',
         category: '特色小吃',
         question: '这是哪里的特色美食？'
     },
     {
-        image: '/static/轮播图-4.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/dede5bee-78f7-47e5-a05b-3b81665662f6.jpg',
         category: '网红打卡',
         question: '这个网红店在哪儿？'
     },
     {
-        image: '/static/轮播图-5.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/b1dfa3df-f8b4-4310-973d-28e946fb96cf.jpg',
         category: '探店攻略',
         question: '在哪儿能吃到这个？'
     }
@@ -325,6 +325,17 @@ const selectBannerCard = (item) => {
  */
 const uploadBannerAndSend = (imagePath, question) => {
     isUploading.value = true;
+    
+    // 如果是远程图片(http/https开头)，直接使用，无需上传
+    if (imagePath && (imagePath.startsWith('http://') || imagePath.startsWith('https://'))) {
+        currentRemoteFilePath.value = imagePath;
+        isUploading.value = false;
+        
+        // 自动发送消息
+        inputText.value = question;
+        sendMessage();
+        return;
+    }
     
     // 对于静态资源图片，使用完整URL路径上传
     const fullPath = imagePath.startsWith('/static') 
@@ -998,7 +1009,7 @@ onShareAppMessage(() => {
     const aiMessages = messages.value.filter(msg => msg.role === 'ai');
     let shareTitle = '看看这家店在哪里！';
     let shareDesc = 'AI智能识别餐厅位置';
-    let imageUrl = '/static/where_to_eat_logo.png';
+    let imageUrl = 'https://oss.swimmingliu.cn/foodie_paradise/878b89c5-2835-4308-a2ee-e928f31a0026.png';
     
     if (aiMessages.length > 0) {
         const lastAiMsg = aiMessages[aiMessages.length - 1];
@@ -1047,7 +1058,7 @@ onShareTimeline(() => {
     return {
         title: shareTitle,
         query: '',
-        imageUrl: '/static/where_to_eat_logo.png'
+        imageUrl: 'https://oss.swimmingliu.cn/foodie_paradise/878b89c5-2835-4308-a2ee-e928f31a0026.png'
     };
 });
 </script>

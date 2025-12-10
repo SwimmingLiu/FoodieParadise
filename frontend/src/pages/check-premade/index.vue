@@ -30,7 +30,7 @@
         <!-- Upload Button -->
         <view class="upload-section">
           <view class="upload-main-btn" @click="chooseImage">
-            <image src="/static/upload_photo_icon.svg" mode="aspectFit" class="upload-icon"></image>
+            <image src="https://oss.swimmingliu.cn/foodie_paradise/f65002d6-d3cc-43ff-b5f6-2d637cf06672.svg" mode="aspectFit" class="upload-icon"></image>
             <text class="upload-text">上传菜品图片</text>
           </view>
           <text class="upload-hint">支持拍照或从相册选择</text>
@@ -128,11 +128,11 @@ const mpHtmlTagStyle = {
 
 // State
 const bannerCards = ref([
-    { image: '/static/轮播图-1.jpg', title: '酸菜鱼', desc: '预制菜重灾区？' },
-    { image: '/static/轮播图-2.jpg', title: '小炒黄牛肉', desc: '如何分辨现炒？' },
-    { image: '/static/轮播图-3.jpg', title: '红烧肉', desc: '看汤汁识预制' },
-    { image: '/static/轮播图-4.jpg', title: '水晶虾仁', desc: '质地是关键' },
-    { image: '/static/轮播图-5.jpg', title: '宫保鸡丁', desc: '配料统一的秘密' }
+    { image: 'https://oss.swimmingliu.cn/foodie_paradise/8c0e4d50-ffbe-4659-8c3b-6f485355ef53.jpg', title: '酸菜鱼', desc: '预制菜重灾区？' },
+    { image: 'https://oss.swimmingliu.cn/foodie_paradise/9cdfa36a-5463-4178-bb74-a70a6027a646.jpg', title: '小炒黄牛肉', desc: '如何分辨现炒？' },
+    { image: 'https://oss.swimmingliu.cn/foodie_paradise/d6443171-7424-4a11-b523-5d30051e4185.jpg', title: '红烧肉', desc: '看汤汁识预制' },
+    { image: 'https://oss.swimmingliu.cn/foodie_paradise/dede5bee-78f7-47e5-a05b-3b81665662f6.jpg', title: '水晶虾仁', desc: '质地是关键' },
+    { image: 'https://oss.swimmingliu.cn/foodie_paradise/b1dfa3df-f8b4-4310-973d-28e946fb96cf.jpg', title: '宫保鸡丁', desc: '配料统一的秘密' }
 ]);
 const currentBannerIndex = ref(0);
 const currentImage = ref(null);
@@ -197,8 +197,14 @@ const uploadAndAnalyze = (filePath, isStatic = false) => {
     structuredResult.value = null;
     showThoughts.value = true;
 
-    // Handle static paths
+    // Handle static paths or remote URLs
     const fullPath = isStatic && filePath.startsWith('/') ? filePath : filePath;
+
+    // 如果是远程图片(http/https开头)，直接使用，无需上传
+    if (fullPath && (fullPath.startsWith('http://') || fullPath.startsWith('https://'))) {
+        startStreamAnalysis(fullPath);
+        return;
+    }
 
     uni.uploadFile({
         url: 'http://localhost:8000/api/upload',

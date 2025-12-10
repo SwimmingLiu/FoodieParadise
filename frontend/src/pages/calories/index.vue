@@ -30,7 +30,7 @@
         <!-- Upload Button -->
         <view class="upload-section">
           <view class="upload-main-btn" @click="chooseImage">
-            <image src="/static/upload_photo_icon.svg" mode="aspectFit" class="upload-icon"></image>
+            <image src="https://oss.swimmingliu.cn/foodie_paradise/f65002d6-d3cc-43ff-b5f6-2d637cf06672.svg" mode="aspectFit" class="upload-icon"></image>
             <text class="upload-text">上传图片</text>
           </view>
           <text class="upload-hint">一键识别，了解美食热量</text>
@@ -99,11 +99,18 @@
               <text class="total-value">{{ totalCalories }}</text>
               <text class="total-unit">千卡</text>
             </view>
-            <view v-if="overallAdvice" class="advice-section">
-              <text class="advice-icon">💡</text>
-              <text class="advice-text">{{ overallAdvice }}</text>
-            </view>
           </view>
+        </view>
+
+        <!-- Advice Card -->
+        <view v-if="overallAdvice" class="advice-card">
+            <view class="advice-header">
+                <text class="advice-icon">💡</text>
+                <text class="advice-title">综合建议</text>
+            </view>
+            <view class="advice-content">
+                <text>{{ overallAdvice }}</text>
+            </view>
         </view>
 
         <!-- Result Content -->
@@ -224,27 +231,27 @@ const mpHtmlTagStyle = {
 // Banner cards for swiper
 const bannerCards = ref([
     {
-        image: '/static/轮播图-1.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/8c0e4d50-ffbe-4659-8c3b-6f485355ef53.jpg',
         category: '热量揭秘',
         description: '这道菜热量超标了吗？'
     },
     {
-        image: '/static/轮播图-2.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/9cdfa36a-5463-4178-bb74-a70a6027a646.jpg',
         category: '减肥必看',
         description: '减脂期能不能吃这个？'
     },
     {
-        image: '/static/轮播图-3.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/d6443171-7424-4a11-b523-5d30051e4185.jpg',
         category: '营养分析',
         description: '这顿饭营养搭配如何？'
     },
     {
-        image: '/static/轮播图-4.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/dede5bee-78f7-47e5-a05b-3b81665662f6.jpg',
         category: '运动消耗',
         description: '吃完需要跑多久？'
     },
     {
-        image: '/static/轮播图-5.jpg',
+        image: 'https://oss.swimmingliu.cn/foodie_paradise/b1dfa3df-f8b4-4310-973d-28e946fb96cf.jpg',
         category: '健康饮食',
         description: '如何吃得更健康？'
     }
@@ -303,6 +310,13 @@ const selectBannerCard = (item) => {
  * 上传轮播图图片
  */
 const uploadBannerImage = (imagePath) => {
+    // 如果是远程图片(http/https开头)，直接使用，无需上传
+    if (imagePath && (imagePath.startsWith('http://') || imagePath.startsWith('https://'))) {
+        currentRemoteFilePath.value = imagePath;
+        isUploading.value = false;
+        return;
+    }
+
     isUploading.value = true;
     
     uni.uploadFile({
@@ -589,7 +603,6 @@ const extractFoodDataFromContent = (content) => {
             
             if (data.food_items && data.food_items.length > 0) {
                 foodItems.value = data.food_items;
-                console.log('[DEBUG] Parsed food items:', foodItems.value);
             }
             if (data.total_calories) {
                 totalCalories.value = data.total_calories;
@@ -601,6 +614,15 @@ const extractFoodDataFromContent = (content) => {
     } catch (e) {
         console.error('[DEBUG] Failed to extract food data:', e);
         
+        // 备用方案：通过简单的字符串查找提取 advice
+        // 即使JSON解析失败，也尝试获取建议
+        try {
+             const adviceMatch = content.match(/"overall_advice"\s*:\s*"([^"]*(?:\\"[^"]*)*)"/);
+             if (adviceMatch) {
+                 overallAdvice.value = adviceMatch[1];
+             }
+        } catch (e2) {}
+
         // 备用方案：使用正则表达式提取单个食物项
         try {
             const items = [];
@@ -626,10 +648,12 @@ const extractFoodDataFromContent = (content) => {
                 totalCalories.value = parseInt(totalMatch[1]);
             }
             
-            // 提取建议
-            const adviceMatch = content.match(/"overall_advice"\s*:\s*"([^"]+)"/);
-            if (adviceMatch) {
-                overallAdvice.value = adviceMatch[1];
+            // 提取建议 (if not already found)
+            if (!overallAdvice.value) {
+                const adviceMatch = content.match(/"overall_advice"\s*:\s*"([^"]+)"/);
+                if (adviceMatch) {
+                    overallAdvice.value = adviceMatch[1];
+                }
             }
         } catch (fallbackError) {
             console.error('[DEBUG] Fallback extraction also failed:', fallbackError);
@@ -708,7 +732,7 @@ onShareAppMessage(() => {
     return {
         title: shareTitle,
         path: '/pages/calories/index',
-        imageUrl: currentImage.value || '/static/体重秤.png'
+        imageUrl: currentImage.value || 'https://oss.swimmingliu.cn/foodie_paradise/66c375a3-52d8-41d0-aab9-3c2a34f835ae.png'
     };
 });
 
@@ -716,7 +740,7 @@ onShareTimeline(() => {
     return {
         title: totalCalories.value > 0 ? `🍽️ 这顿饭共${totalCalories.value}千卡` : 'AI热量计算器',
         query: '',
-        imageUrl: '/static/体重秤.png'
+        imageUrl: 'https://oss.swimmingliu.cn/foodie_paradise/66c375a3-52d8-41d0-aab9-3c2a34f835ae.png'
     };
 });
 </script>
@@ -1108,23 +1132,40 @@ onShareTimeline(() => {
     opacity: 0.8;
 }
 
-.advice-section {
+/* ========== Advice Card ========== */
+.advice-card {
+    background-color: #fff;
+    border-radius: 20rpx;
+    padding: 24rpx;
+    margin-bottom: 24rpx;
+    box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+    border-left: 8rpx solid #ffd700;
+}
+
+.advice-header {
     display: flex;
-    align-items: flex-start;
-    background-color: rgba(255, 255, 255, 0.15);
-    padding: 16rpx;
-    border-radius: 12rpx;
+    align-items: center;
+    margin-bottom: 16rpx;
 }
 
 .advice-icon {
-    font-size: 24rpx;
+    font-size: 32rpx;
     margin-right: 12rpx;
-    flex-shrink: 0;
 }
 
-.advice-text {
-    font-size: 24rpx;
+.advice-title {
+    font-size: 30rpx;
+    font-weight: 700;
+    color: #333;
+}
+
+.advice-content {
+    font-size: 28rpx;
+    color: #555;
     line-height: 1.6;
+    background-color: #fff9c4;
+    padding: 20rpx;
+    border-radius: 12rpx;
 }
 
 /* ========== Result Section ========== */
