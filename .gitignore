@@ -70,3 +70,6 @@ backend/tests/
 
 # npm
 .npm-cache/
+
+# AI Coding
+.qoder

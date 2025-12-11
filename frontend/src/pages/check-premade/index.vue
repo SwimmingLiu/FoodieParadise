@@ -412,8 +412,12 @@ const decodeHTMLEntities = (text) => {
 const parseMarkdown = (content) => {
     if (!content) return '';
     try {
-        // 先解码 HTML 实体，再解析 markdown
-        const decoded = decodeHTMLEntities(content);
+        // 先解码 HTML 实体
+        let decoded = decodeHTMLEntities(content);
+        
+        // 【修复】手动处理 Markdown 加粗语法 (**text**)，解决部分特殊符号（如中文引号）导致无法加粗的问题
+        decoded = decoded.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
         // 将字面 \n 字符串替换为实际换行符
         const withNewlines = decoded.replace(/\\n/g, '\n');
         return marked.parse(withNewlines);

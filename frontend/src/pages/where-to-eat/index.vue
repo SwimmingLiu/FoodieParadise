@@ -904,10 +904,17 @@ const extractLocationFromContent = (content) => {
 const parseMarkdown = (content) => {
     if (!content) return '';
     try {
-        // First decode HTML entities, then parse markdown
-        const decoded = decodeHTMLEntities(content);
-        // Replace literal \n strings with actual newlines for proper line break rendering
+        // 先解码 HTML 实体
+        let decoded = decodeHTMLEntities(content);
+        
+        // 【修复】手动处理 Markdown 加粗语法 (**text**)，解决部分特殊符号（如中文引号）导致无法加粗的问题
+        // 使用正则将 **内容** 替换为 <strong>内容</strong>
+        // 注意：非贪婪匹配，且不跨行
+        decoded = decoded.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
+        // 将字面 \n 字符串替换为实际换行符
         const withNewlines = decoded.replace(/\\n/g, '\n');
+        
         return marked.parse(withNewlines);
     } catch (e) {
         console.error('Markdown parse error:', e);

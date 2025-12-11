@@ -47,24 +47,22 @@
           </view>
         </view>
 
-        <!-- Thinking Process -->
-        <view v-if="isAnalyzing || thinkingContent" class="thought-card">
+        <!-- Thinking Process - Show if content exists (even while analyzing) -->
+        <view v-if="thinkingContent" class="thought-card">
           <view class="thought-card-header" @click="toggleThinking">
             <text class="thought-icon">💡</text>
-            <text class="thought-step-label">AI分析中...</text>
+            <text class="thought-step-label">AI 思考过程</text>
             <view :class="['thought-arrow', thinkingExpanded ? 'expanded' : '']"></view>
           </view>
           <view v-if="thinkingExpanded" class="thought-card-body">
-            <!-- 预设加载提示 - 在AI返回内容之前显示 -->
-            <view v-if="isAnalyzing && visibleHints.length > 0" class="preset-hints">
-              <view v-for="(hint, index) in visibleHints" :key="index" class="preset-hint-item">
-                <text class="hint-icon">{{ hint.icon }}</text>
-                <text class="hint-text">{{ hint.text }}</text>
-              </view>
-            </view>
-            <!-- AI 返回的思考内容 -->
-            <mp-html v-if="thinkingContent" :content="parseMarkdown(thinkingContent)" :tag-style="mpHtmlTagStyle" />
+            <mp-html :content="parseMarkdown(thinkingContent)" :tag-style="mpHtmlTagStyle" />
           </view>
+        </view>
+
+        <!-- Simple Analysis Loading Indicator (Matches Check Premade Style) - Show BELOW thoughts while analyzing -->
+        <view v-if="isAnalyzing" class="analyzing-indicator-card">
+            <view class="dot-flashing"></view>
+            <text>正在分析当前图片中的信息...</text>
         </view>
 
         <!-- Food Cards -->
@@ -297,16 +295,10 @@ const foodItems = ref([]);
 const totalCalories = ref(0);
 const overallAdvice = ref('');
 
-// 预设加载提示 - 防止用户焦虑等待
-const presetHints = [
-    { icon: '🔍', text: '正在识别图片中的食物...' },
-    { icon: '🏃', text: '正在计算运动消耗...' },
-    { icon: '📊', text: '正在估算食物热量...' },
-    { icon: '🍳', text: '正在分析食物的种类、烹饪方式和热量密度...' },
-    { icon: '🧠', text: '正在综合分析结果...' }
-];
-const visibleHints = ref([]);
-let hintTimer = null;
+// 预设加载提示 - 已移除，使用简单加载状态
+// const presetHints = [];
+// const visibleHints = ref([]);
+// let hintTimer = null;
 
 // Request task reference
 let currentRequestTask = null;
@@ -436,38 +428,17 @@ const submitAnalysis = () => {
 };
 
 /**
- * 启动预设提示动画 - 逐步显示加载提示
+ * 启动预设提示动画 - 已废弃
  */
 const startPresetHints = () => {
-    visibleHints.value = [];
-    let index = 0;
-    
-    // 立即显示第一条
-    if (presetHints.length > 0) {
-        visibleHints.value.push(presetHints[0]);
-        index = 1;
-    }
-    
-    // 每 800ms 显示一条新提示
-    hintTimer = setInterval(() => {
-        if (index < presetHints.length) {
-            visibleHints.value.push(presetHints[index]);
-            index++;
-        } else {
-            clearInterval(hintTimer);
-            hintTimer = null;
-        }
-    }, 800);
+    // visibleHints.value = [];
 };
 
 /**
- * 停止预设提示动画
+ * 停止预设提示动画 - 已废弃
  */
 const stopPresetHints = () => {
-    if (hintTimer) {
-        clearInterval(hintTimer);
-        hintTimer = null;
-    }
+    // if (hintTimer) clearInterval(hintTimer);
 };
 
 /**
@@ -775,7 +746,12 @@ const cleanJsonFromContent = (content) => {
 const parseMarkdown = (content) => {
     if (!content) return '';
     try {
-        const decoded = decodeHTMLEntities(content);
+        // 先解码 HTML 实体
+        let decoded = decodeHTMLEntities(content);
+        
+        // 【修复】手动处理 Markdown 加粗语法 (**text**)，解决部分特殊符号（如中文引号）导致无法加粗的问题
+        decoded = decoded.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
         const withNewlines = decoded.replace(/\\n/g, '\n');
         return marked.parse(withNewlines);
     } catch (e) {
@@ -1546,5 +1522,36 @@ onShareTimeline(() => {
     align-items: center;
     justify-content: center;
     z-index: 999;
+}
+
+/* Loading Indicator Card */
+.analyzing-indicator-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40rpx;
+    background: #fff;
+    border-radius: 24rpx;
+    margin-bottom: 24rpx;
+    box-shadow: 0 8rpx 32rpx rgba(0,0,0,0.06);
+    color: #999;
+    font-size: 26rpx;
+}
+
+.dot-flashing {
+    width: 10rpx;
+    height: 10rpx;
+    background-color: #999;
+    border-radius: 50%;
+    animation: dot-flashing 1s infinite linear alternate;
+    margin-right: 20rpx;
+    position: relative;
+    left: -15rpx;
+}
+
+@keyframes dot-flashing {
+    0% { background-color: #999; }
+    50% { background-color: #ccc; }
+    100% { background-color: #eee; }
 }
 </style>
