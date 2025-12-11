@@ -33,12 +33,13 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { API_ENDPOINTS } from '../../config/index.js';
 
 const historyList = ref([]);
 
 const fetchHistory = () => {
   uni.request({
-    url: 'http://localhost:8000/api/history',
+    url: API_ENDPOINTS.HISTORY,
     success: (res) => {
       historyList.value = res.data;
     }

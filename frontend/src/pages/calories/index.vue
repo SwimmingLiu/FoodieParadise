@@ -8,7 +8,7 @@
         <!-- Header with Logo and Title -->
         <view class="header-section">
           <view class="header-title-row">
-            <image src="https://oss.swimmingliu.cn/foodie_paradise/c4099e5e-645d-4618-8e4c-1b7a6953e9ff.png" mode="aspectFit" class="header-logo"></image>
+            <image src="https://oss.swimmingliu.cn/foodie_paradise/84fb877f-7b8c-476e-bf4a-d0a1a8971414.png" mode="aspectFit" class="header-logo"></image>
             <text class="header-title">吃多少</text>
           </view>
           <text class="header-slogan">拍张美食照，AI秒算热量消耗</text>
@@ -48,14 +48,22 @@
         </view>
 
         <!-- Thinking Process -->
-        <view v-if="thinkingContent" class="thought-card">
+        <view v-if="isAnalyzing || thinkingContent" class="thought-card">
           <view class="thought-card-header" @click="toggleThinking">
             <text class="thought-icon">💡</text>
             <text class="thought-step-label">AI分析中...</text>
             <view :class="['thought-arrow', thinkingExpanded ? 'expanded' : '']"></view>
           </view>
           <view v-if="thinkingExpanded" class="thought-card-body">
-            <mp-html :content="parseMarkdown(thinkingContent)" :tag-style="mpHtmlTagStyle" />
+            <!-- 预设加载提示 - 在AI返回内容之前显示 -->
+            <view v-if="isAnalyzing && visibleHints.length > 0" class="preset-hints">
+              <view v-for="(hint, index) in visibleHints" :key="index" class="preset-hint-item">
+                <text class="hint-icon">{{ hint.icon }}</text>
+                <text class="hint-text">{{ hint.text }}</text>
+              </view>
+            </view>
+            <!-- AI 返回的思考内容 -->
+            <mp-html v-if="thinkingContent" :content="parseMarkdown(thinkingContent)" :tag-style="mpHtmlTagStyle" />
           </view>
         </view>
 
@@ -205,6 +213,7 @@
 import { ref, nextTick } from 'vue';
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app';
 import { streamRequest } from '../../utils/request.js';
+import { API_ENDPOINTS } from '../../config/index.js';
 import mpHtml from 'mp-html/dist/uni-app/components/mp-html/mp-html.vue';
 import { marked } from 'marked';
 
@@ -288,6 +297,17 @@ const foodItems = ref([]);
 const totalCalories = ref(0);
 const overallAdvice = ref('');
 
+// 预设加载提示 - 防止用户焦虑等待
+const presetHints = [
+    { icon: '🔍', text: '正在识别图片中的食物...' },
+    { icon: '🏃', text: '正在计算运动消耗...' },
+    { icon: '📊', text: '正在估算食物热量...' },
+    { icon: '🍳', text: '正在分析食物的种类、烹饪方式和热量密度...' },
+    { icon: '🧠', text: '正在综合分析结果...' }
+];
+const visibleHints = ref([]);
+let hintTimer = null;
+
 // Request task reference
 let currentRequestTask = null;
 
@@ -322,7 +342,7 @@ const uploadBannerImage = (imagePath) => {
     isUploading.value = true;
     
     uni.uploadFile({
-        url: 'http://localhost:8000/api/upload',
+        url: API_ENDPOINTS.UPLOAD,
         filePath: imagePath,
         name: 'file',
         success: (uploadRes) => {
@@ -365,7 +385,7 @@ const chooseImage = () => {
 const uploadImage = (tempFilePath) => {
     isUploading.value = true;
     uni.uploadFile({
-        url: 'http://localhost:8000/api/upload',
+        url: API_ENDPOINTS.UPLOAD,
         filePath: tempFilePath,
         name: 'file',
         success: (uploadRes) => {
@@ -416,6 +436,41 @@ const submitAnalysis = () => {
 };
 
 /**
+ * 启动预设提示动画 - 逐步显示加载提示
+ */
+const startPresetHints = () => {
+    visibleHints.value = [];
+    let index = 0;
+    
+    // 立即显示第一条
+    if (presetHints.length > 0) {
+        visibleHints.value.push(presetHints[0]);
+        index = 1;
+    }
+    
+    // 每 800ms 显示一条新提示
+    hintTimer = setInterval(() => {
+        if (index < presetHints.length) {
+            visibleHints.value.push(presetHints[index]);
+            index++;
+        } else {
+            clearInterval(hintTimer);
+            hintTimer = null;
+        }
+    }, 800);
+};
+
+/**
+ * 停止预设提示动画
+ */
+const stopPresetHints = () => {
+    if (hintTimer) {
+        clearInterval(hintTimer);
+        hintTimer = null;
+    }
+};
+
+/**
  * 开始分析
  */
 const startAnalysis = () => {
@@ -427,9 +482,12 @@ const startAnalysis = () => {
     overallAdvice.value = '';
     isAnalyzing.value = true;
     
+    // 启动预设提示动画
+    startPresetHints();
+    
     // 发起流式请求
     currentRequestTask = streamRequest({
-        url: 'http://localhost:8000/api/calories',
+        url: API_ENDPOINTS.CALORIES,
         method: 'POST',
         data: {
             file_path: currentRemoteFilePath.value,
@@ -465,6 +523,7 @@ const startAnalysis = () => {
         onComplete: () => {
             isAnalyzing.value = false;
             currentRequestTask = null;
+            stopPresetHints();
             
             // 尝试从结果内容中提取JSON数据（如果还没有通过function_call接收到）
             if (foodItems.value.length === 0 && resultContent.value) {
@@ -480,6 +539,7 @@ const startAnalysis = () => {
             console.error("Stream error", err);
             isAnalyzing.value = false;
             currentRequestTask = null;
+            stopPresetHints();
             resultContent.value += "\n[分析失败]";
         }
     });
@@ -494,6 +554,7 @@ const handleStop = () => {
         currentRequestTask = null;
     }
     isAnalyzing.value = false;
+    stopPresetHints();
 };
 
 /**
@@ -977,6 +1038,41 @@ onShareTimeline(() => {
     font-size: 28rpx;
     line-height: 1.8;
     color: #555;
+}
+
+/* ========== 预设加载提示样式 ========== */
+.preset-hints {
+    display: flex;
+    flex-direction: column;
+    gap: 16rpx;
+    margin-bottom: 16rpx;
+}
+
+.preset-hint-item {
+    display: flex;
+    align-items: center;
+    animation: fadeInUp 0.4s ease-out;
+}
+
+.hint-icon {
+    font-size: 28rpx;
+    margin-right: 12rpx;
+}
+
+.hint-text {
+    font-size: 26rpx;
+    color: #666;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10rpx);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* ========== Food Cards Section ========== */

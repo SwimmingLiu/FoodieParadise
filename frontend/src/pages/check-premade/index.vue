@@ -8,7 +8,7 @@
         <!-- Header -->
         <view class="header-section">
           <view class="header-title-row">
-            <text class="header-icon">🔍</text>
+            <image src="https://oss.swimmingliu.cn/foodie_paradise/a58b234f-ccdf-4041-b146-724e519a4f2f.png" mode="aspectFit" class="header-icon"></image>
             <text class="header-title">查预制</text>
           </view>
           <text class="header-slogan">一眼识别预制菜，守护舌尖安全</text>
@@ -142,6 +142,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { streamRequest } from '../../utils/request.js';
+import { API_ENDPOINTS } from '../../config/index.js';
 import mpHtml from 'mp-html/dist/uni-app/components/mp-html/mp-html.vue';
 import { marked } from 'marked';
 
@@ -304,7 +305,7 @@ const uploadAndAnalyze = (filePath, isStatic = false) => {
     }
 
     uni.uploadFile({
-        url: 'http://localhost:8000/api/upload',
+        url: API_ENDPOINTS.UPLOAD,
         filePath: fullPath,
         name: 'file',
         success: (uploadRes) => {
@@ -328,7 +329,7 @@ const uploadAndAnalyze = (filePath, isStatic = false) => {
 
 const startStreamAnalysis = (remotePath) => {
     streamRequest({
-        url: 'http://localhost:8000/api/check-premade',
+        url: API_ENDPOINTS.CHECK_PREMADE,
         method: 'POST',
         data: { file_path: remotePath },
         onEvent: (eventType, data) => {
@@ -457,8 +458,9 @@ const parseMarkdown = (content) => {
     margin-bottom: 10rpx;
 }
 .header-icon {
-    font-size: 48rpx;
-    margin-right: 16rpx;
+    width: 56rpx;
+    height: 56rpx;
+    margin-right: 12rpx;
 }
 .header-title {
     font-size: 48rpx;

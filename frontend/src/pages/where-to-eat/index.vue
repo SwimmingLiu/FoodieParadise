@@ -12,7 +12,7 @@
         <!-- Header with Logo and Title -->
         <view class="header-section">
           <view class="header-title-row">
-            <image src="https://oss.swimmingliu.cn/foodie_paradise/878b89c5-2835-4308-a2ee-e928f31a0026.png" mode="aspectFit" class="header-logo"></image>
+            <image src="https://oss.swimmingliu.cn/foodie_paradise/c050311f-f1f0-463a-8c4d-3a84ceb8a57a.png" mode="aspectFit" class="header-logo"></image>
             <text class="header-title">去哪吃</text>
           </view>
           <text class="header-slogan">拍张美食照，AI秒定位附近同款</text>
@@ -221,6 +221,7 @@
 import { ref, nextTick, onMounted } from 'vue';
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app';
 import { streamRequest } from '../../utils/request.js';
+import { API_ENDPOINTS } from '../../config/index.js';
 import mpHtml from 'mp-html/dist/uni-app/components/mp-html/mp-html.vue';
 import { marked } from 'marked';
 
@@ -345,7 +346,7 @@ const uploadBannerAndSend = (imagePath, question) => {
         : imagePath;
     
     uni.uploadFile({
-        url: 'http://localhost:8000/api/upload',
+        url: API_ENDPOINTS.UPLOAD,
         filePath: fullPath,
         name: 'file',
         success: (uploadRes) => {
@@ -442,7 +443,7 @@ const submitWithQuestion = () => {
 const uploadImage = (tempFilePath) => {
     isUploading.value = true;
     uni.uploadFile({
-        url: 'http://localhost:8000/api/upload',
+        url: API_ENDPOINTS.UPLOAD,
         filePath: tempFilePath,
         name: 'file',
         success: (uploadRes) => {
@@ -511,7 +512,7 @@ const sendMessage = () => {
 
     // Start Stream with proper event handling
     currentRequestTask = streamRequest({
-        url: 'http://localhost:8000/api/where-to-eat',
+        url: API_ENDPOINTS.WHERE_TO_EAT,
         method: 'POST',
         data: {
             file_path: currentRemoteFilePath.value,
